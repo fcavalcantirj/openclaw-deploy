@@ -13,10 +13,24 @@ NC='\033[0m'
 
 # Configuration
 BATCH_SIZE=${BATCH_SIZE:-3}
-BATCH_PAUSE_MINS=${BATCH_PAUSE_MINS:-15}
-WAIT_TIME_MINS=${WAIT_TIME_MINS:-15}
+BATCH_PAUSE_MINS=${BATCH_PAUSE_MINS:-2}
+WAIT_TIME_MINS=${WAIT_TIME_MINS:-5}
 BATCH_PAUSE_SECS=$((BATCH_PAUSE_MINS * 60))
 WAIT_TIME_SECS=$((WAIT_TIME_MINS * 60))
+
+# Telegram notifications (set env vars to enable)
+TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-""}
+TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-"152099202"}
+
+send_telegram() {
+  local message="$1"
+  if [ -n "$TELEGRAM_BOT_TOKEN" ]; then
+    curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+      -d "chat_id=${TELEGRAM_CHAT_ID}" \
+      -d "text=${message}" \
+      -d "parse_mode=Markdown" > /dev/null 2>&1
+  fi
+}
 
 format_time() {
   local secs=$1
@@ -37,6 +51,12 @@ echo -e "${MAGENTA}${BOLD}║  🕐 Started: $(date '+%Y-%m-%d %H:%M:%S')       
 echo -e "${MAGENTA}${BOLD}╚═════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
+send_telegram "🚀 *OpenClaw Deploy* started
+
+📦 Batch: ${BATCH_SIZE} iterations
+⏸️ Pause: ${BATCH_PAUSE_MINS} min
+📊 $(./progress.sh)"
+
 while true; do
   batch_count=$((batch_count + 1))
   batch_start=$(date +%s)
@@ -45,6 +65,10 @@ while true; do
   echo -e "${CYAN}${BOLD}┌─────────────────────────────────────────────────────────────┐${NC}"
   echo -e "${CYAN}${BOLD}│  ▶ BATCH #${batch_count} - Running ${BATCH_SIZE} iterations                       │${NC}"
   echo -e "${CYAN}${BOLD}└─────────────────────────────────────────────────────────────┘${NC}"
+
+  send_telegram "▶️ *Batch #${batch_count}* starting
+
+📊 $(./progress.sh)"
 
   tmplog=$(mktemp)
   ./ralph.sh $BATCH_SIZE 2>&1 | tee "$tmplog"
@@ -81,17 +105,38 @@ while true; do
     echo -e "${GREEN}${BOLD}║  ⏱️  Total time: $(format_time $total_time)                                   ║${NC}"
     echo -e "${GREEN}${BOLD}║  📊 $(./progress.sh)                                        ║${NC}"
     echo -e "${GREEN}${BOLD}╚═════════════════════════════════════════════════════════════╝${NC}"
+
+    send_telegram "🎉 *ALL TASKS COMPLETE!*
+
+📦 Batches: ${batch_count}
+🔄 Iterations: ${total_iterations}
+⏱️ Time: $(format_time $total_time)
+📊 $(./progress.sh)"
+
     exit 0
   fi
 
   if [ "$api_error" = true ]; then
     echo ""
     echo -e "${RED}${BOLD}  🚨 API Error - Waiting ${WAIT_TIME_MINS} minutes...${NC}"
+    
+    send_telegram "🚨 *API Error* - Batch #${batch_count}
+
+⏸️ Waiting ${WAIT_TIME_MINS} min
+📊 $(./progress.sh)"
+
     sleep $WAIT_TIME_SECS
   else
     echo ""
     echo -e "${GREEN}${BOLD}  ✅ Batch #${batch_count} done ($(format_time $batch_time)) - $(./progress.sh)${NC}"
     echo -e "${YELLOW}  ⏸️  Pausing ${BATCH_PAUSE_MINS} minutes...${NC}"
+
+    send_telegram "✅ *Batch #${batch_count}* complete
+
+⏱️ Duration: $(format_time $batch_time)
+📊 $(./progress.sh)
+⏸️ Next batch in ${BATCH_PAUSE_MINS} min"
+
     sleep $BATCH_PAUSE_SECS
   fi
 done
