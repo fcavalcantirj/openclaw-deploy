@@ -230,3 +230,20 @@
 ═══════════════════════════════════════════════════════════
 ALL TASKS COMPLETE - OpenClaw Deploy v1.0 Ready
 ═══════════════════════════════════════════════════════════
+
+## 2026-02-13 (Onboarding Tasks)
+- ✅ Task 16: setup-telegram-bot.sh created and verified
+- Script accepts instance name and bot token as arguments
+- Validates bot token format: /^[0-9]+:[A-Za-z0-9_-]+$/
+- Tests bot token via Telegram API (api.telegram.org/bot{token}/getMe)
+- Updates OpenClaw config with bot token using jq (with backup)
+- Restarts OpenClaw gateway to apply changes
+- Updates instance metadata with bot username
+- Outputs bot username for sharing with users
+- Provides commands to check and approve pairing requests
+- Created helper script: list-pairing-requests.sh
+- list-pairing-requests.sh lists pending Telegram pairing requests
+- Both scripts handle SSH connectivity and error cases gracefully
+- Clear step-by-step output with color-coded status
+- Syntax verified with bash -n for both scripts
+- All requirements met per specs/prd-v1.json task 16
