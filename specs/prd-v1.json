@@ -19,7 +19,7 @@
   {"category": "control","description": "Create restart.sh to restart OpenClaw gateway on an instance","passes": true},
   {"category": "control","description": "Create update.sh to update OpenClaw version on an instance","passes": true},
   {"category": "control","description": "Create logs.sh to fetch and display logs from an instance","passes": true},
-  {"category": "control","description": "Create config-view.sh to view/update config on an instance","passes": false},
+  {"category": "control","description": "Create config-view.sh to view/update config on an instance","passes": true},
   {"category": "monitoring","description": "Create monitor-all.sh that checks ALL instances and alerts on issues","passes": false},
   {"category": "monitoring","description": "Add cron/heartbeat integration to monitor children from parent Claw","passes": false},
   {"category": "recovery","description": "Create resuscitate.sh to recover crashed/unresponsive instances","passes": false},

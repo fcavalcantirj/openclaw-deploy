@@ -29,7 +29,7 @@
 - restart.sh ✓ — restart gateway
 - update.sh ✓ — update OpenClaw
 - logs.sh ✓ — fetch logs
-- config-view.sh — view/edit config
+- config-view.sh ✓ — view/edit config
 
 ### Monitoring (2)
 - monitor-all.sh — check ALL instances
