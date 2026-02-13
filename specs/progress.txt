@@ -1,61 +1,24 @@
 # OpenClaw Deploy Progress
 
-## 2026-02-13
-- Initial project structure created
-- Specs consolidated to prd-v1.json (14 tasks)
-- Scripts copied from zip: provision.sh, bootstrap.sh
-- prompts/setup-openclaw.md ready
-- Credentials stored (gitignored)
-- hcloud CLI configured and verified
+## 2026-02-13 04:44
+- RESET: Corrected approach
+- Ralph writes scripts, doesn't deploy
+- Scripts use Claude Code ON VM for config
+- Cleaned up test-setup-001 VM
+- 14 tasks: all about writing scripts
 
-### Task #1: Infrastructure - hcloud verification ✓
-- Verified hcloud CLI installed at /home/clawdbot/bin/hcloud
-- Version: 1.61.0
-- Active context: openclaw
-- Connectivity test: PASSED (hcloud server list works)
-- Created instances/hcloud-verified.json
-- Status: **COMPLETE**
-
-### Task #2: Infrastructure - Anthropic API key storage ✓
-- Read key from ~/.openclaw/agents/main/agent/auth-profiles.json
-- Extracted anthropic:token key value
-- Verified in instances/credentials.json (already stored)
-- Key format verified: starts with sk-ant-
-- Security verified: credentials.json is in .gitignore
-- Status: **COMPLETE**
-
-### Task #3: Provision - Create provision.sh script ✓
-- Tested provision.sh with test VM (test-provision-001)
-- Successfully created Hetzner VM (cx23, ubuntu-24.04, nbg1)
-- Generated SSH key: ed25519 format
-- Uploaded SSH key to Hetzner
-- Verified SSH connectivity: ssh root@IP 'echo ok' returned "ok"
-- Metadata correctly written to instances/{name}/metadata.json
-- All fields present: name, ip, region, server_type, status, created_at, ssh_key_path
-- Status field correctly set to "provisioned"
-- Clean up tested: deleted VM, SSH key, and local files successfully
-- Status: **COMPLETE**
-
-### Task #4: Provision - Create bootstrap.sh ✓
-- Created and tested bootstrap.sh script on test VM (test-bootstrap-001)
-- Successfully installed all required packages:
-  - System packages: curl, git, jq, ufw, tmux, build-essential
-  - Node.js v22.22.0 via nodesource
-  - npm v10.9.4
-  - Claude Code CLI v2.1.41
-- UFW firewall configured correctly:
-  - Default deny incoming, allow outgoing
-  - SSH port 22 allowed
-  - Port 18789 NOT exposed (security requirement met)
-- Created openclaw user with sudo access
-- Fixed bootstrap.sh to use correct prompt filename (setup-openclaw.md)
-- All verifications passed:
-  - `node -v` returns v22.22.0 ✓
-  - `which claude` returns /usr/bin/claude ✓
-  - Essential packages installed ✓
-  - openclaw user created with sudo ✓
-  - UFW active with correct rules ✓
-- Status: **COMPLETE**
-
-## Next
-- Task #5: Create Claude Code prompt that installs and configures OpenClaw Gateway
+## Tasks
+1. provision.sh - create VM
+2. bootstrap.sh - install Node + Claude Code
+3. setup-openclaw.sh - run Claude Code for OpenClaw
+4. prompts/setup-openclaw.md - the prompt
+5. setup-tailscale.sh - run Claude Code for Tailscale  
+6. setup-skills.sh - whisper + clawhub
+7. setup-monitoring.sh - healthcheck timer
+8. verify.sh - full checklist
+9. deploy.sh - master orchestrator
+10. destroy.sh - teardown
+11. status.sh + list.sh - management
+12. templates/openclaw.json - base config
+13. README.md - documentation
+14. CLAUDE.md - guidelines

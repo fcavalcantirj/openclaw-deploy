@@ -1,92 +1,145 @@
 #!/usr/bin/env bash
 # ============================================================================
-# 01-provision-vm.sh — Provision a Hetzner Cloud VM for OpenClaw
-# ============================================================================
-# Prerequisites:
-#   brew install hcloud          (macOS)
-#   snap install hcloud          (Linux)
-#   pip install hcloud           (or via pip)
-#
-# Then: hcloud context create openclaw
-#   → paste your Hetzner API token (from https://console.hetzner.cloud)
+# provision.sh — Provision a Hetzner Cloud VM for OpenClaw
 # ============================================================================
 set -euo pipefail
 
-# ── Configuration ──────────────────────────────────────────────────────────
-SERVER_NAME="${SERVER_NAME:-openclaw-gw}"
-SERVER_TYPE="${SERVER_TYPE:-cx22}"          # 2 vCPU, 4GB RAM, 40GB SSD — ~€4/mo
-IMAGE="${IMAGE:-ubuntu-24.04}"
-LOCATION="${LOCATION:-nbg1}"               # Nuremberg; alternatives: fsn1, hel1, ash
-SSH_KEY_NAME="${SSH_KEY_NAME:-openclaw-key}"
-SSH_KEY_PATH="${SSH_KEY_PATH:-$HOME/.ssh/openclaw_ed25519}"
+# ── Parse arguments ─────────────────────────────────────────────────────────
+NAME=""
+REGION="nbg1"
 
-# ── Step 1: Generate SSH key if it doesn't exist ──────────────────────────
-if [ ! -f "$SSH_KEY_PATH" ]; then
-  echo "🔑 Generating SSH key at $SSH_KEY_PATH..."
-  ssh-keygen -t ed25519 -f "$SSH_KEY_PATH" -N "" -C "openclaw-deploy"
-  echo ""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --name)
+      NAME="$2"
+      shift 2
+      ;;
+    --region)
+      REGION="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1"
+      echo "Usage: $0 [--name NAME] [--region REGION]"
+      exit 1
+      ;;
+  esac
+done
+
+# Auto-generate name if not provided
+if [ -z "$NAME" ]; then
+  TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+  NAME="openclaw-${TIMESTAMP}"
 fi
 
-# ── Step 2: Upload SSH key to Hetzner (idempotent) ────────────────────────
+# ── Configuration ───────────────────────────────────────────────────────────
+SERVER_TYPE="cx23"          # 2 vCPU, 4GB RAM, 40GB SSD — ~$3.49/mo
+IMAGE="ubuntu-24.04"
+SSH_KEY_NAME="openclaw-${NAME}"
+SSH_KEY_PATH="$HOME/.ssh/openclaw_${NAME}"
+INSTANCES_DIR="$(cd "$(dirname "$0")/.." && pwd)/instances"
+INSTANCE_DIR="${INSTANCES_DIR}/${NAME}"
+
+echo "════════════════════════════════════════════════════════════════"
+echo "  Provisioning OpenClaw Instance"
+echo "  Name:   $NAME"
+echo "  Region: $REGION"
+echo "  Type:   $SERVER_TYPE"
+echo "════════════════════════════════════════════════════════════════"
+echo ""
+
+# ── Step 1: Generate SSH key if it doesn't exist ───────────────────────────
+if [ ! -f "$SSH_KEY_PATH" ]; then
+  echo "🔑 Generating SSH key at $SSH_KEY_PATH..."
+  ssh-keygen -t ed25519 -f "$SSH_KEY_PATH" -N "" -C "openclaw-${NAME}"
+  echo ""
+else
+  echo "✓ SSH key already exists at $SSH_KEY_PATH"
+fi
+
+# ── Step 2: Upload SSH key to Hetzner (idempotent) ─────────────────────────
 if ! hcloud ssh-key describe "$SSH_KEY_NAME" &>/dev/null; then
   echo "📤 Uploading SSH key to Hetzner..."
   hcloud ssh-key create --name "$SSH_KEY_NAME" --public-key-from-file "${SSH_KEY_PATH}.pub"
+  echo ""
 else
   echo "✓ SSH key '$SSH_KEY_NAME' already exists in Hetzner"
+  echo ""
 fi
 
-# ── Step 3: Create the server ─────────────────────────────────────────────
-if hcloud server describe "$SERVER_NAME" &>/dev/null; then
-  echo "✓ Server '$SERVER_NAME' already exists"
-  SERVER_IP=$(hcloud server ip "$SERVER_NAME")
+# ── Step 3: Create the server ──────────────────────────────────────────────
+if hcloud server describe "$NAME" &>/dev/null; then
+  echo "✓ Server '$NAME' already exists"
+  SERVER_IP=$(hcloud server ip "$NAME")
 else
-  echo "🖥️  Creating server '$SERVER_NAME' ($SERVER_TYPE in $LOCATION)..."
+  echo "🖥️  Creating server '$NAME' ($SERVER_TYPE in $REGION)..."
   hcloud server create \
-    --name "$SERVER_NAME" \
+    --name "$NAME" \
     --type "$SERVER_TYPE" \
     --image "$IMAGE" \
-    --location "$LOCATION" \
-    --ssh-key "$SSH_KEY_NAME"
+    --location "$REGION" \
+    --ssh-key "$SSH_KEY_NAME" \
+    > /dev/null
 
-  SERVER_IP=$(hcloud server ip "$SERVER_NAME")
+  SERVER_IP=$(hcloud server ip "$NAME")
+  echo "✓ Server created with IP: $SERVER_IP"
   echo ""
   echo "⏳ Waiting 30s for server to fully boot..."
   sleep 30
+  echo ""
 fi
 
-echo ""
-echo "════════════════════════════════════════════════════════════════"
-echo "  Server: $SERVER_NAME"
-echo "  IP:     $SERVER_IP"
-echo "  SSH:    ssh -i $SSH_KEY_PATH root@$SERVER_IP"
-echo "════════════════════════════════════════════════════════════════"
+# ── Step 4: Verify SSH connectivity ────────────────────────────────────────
+echo "🔐 Verifying SSH connectivity..."
+MAX_RETRIES=5
+RETRY_COUNT=0
+SSH_OK=false
 
-# ── Step 4: Copy bootstrap script & Claude Code prompt to the server ──────
-echo ""
-echo "📦 Uploading bootstrap files..."
-scp -i "$SSH_KEY_PATH" -o StrictHostKeyChecking=no \
-  "$(dirname "$0")/02-bootstrap.sh" \
-  "$(dirname "$0")/03-claude-code-setup-prompt.md" \
-  root@"$SERVER_IP":/root/
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+  if ssh -i "$SSH_KEY_PATH" -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@"$SERVER_IP" 'echo ok' &>/dev/null; then
+    SSH_OK=true
+    break
+  fi
+  RETRY_COUNT=$((RETRY_COUNT + 1))
+  echo "  Retry $RETRY_COUNT/$MAX_RETRIES..."
+  sleep 5
+done
 
-# ── Step 5: Run the bootstrap ─────────────────────────────────────────────
-echo ""
-echo "🚀 Running bootstrap on the server..."
-echo "   This installs Node 22, Claude Code CLI, and then hands off to Claude Code."
-echo ""
-ssh -i "$SSH_KEY_PATH" -o StrictHostKeyChecking=no root@"$SERVER_IP" \
-  "chmod +x /root/02-bootstrap.sh && /root/02-bootstrap.sh"
+if [ "$SSH_OK" = false ]; then
+  echo "❌ Failed to establish SSH connection after $MAX_RETRIES attempts"
+  exit 1
+fi
 
+echo "✓ SSH connection verified"
 echo ""
+
+# ── Step 5: Create instance directory and metadata ─────────────────────────
+mkdir -p "$INSTANCE_DIR"
+
+CREATED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+cat > "${INSTANCE_DIR}/metadata.json" <<EOF
+{
+  "name": "$NAME",
+  "ip": "$SERVER_IP",
+  "region": "$REGION",
+  "server_type": "$SERVER_TYPE",
+  "status": "provisioned",
+  "created_at": "$CREATED_AT",
+  "ssh_key_path": "$SSH_KEY_PATH"
+}
+EOF
+
+echo "✓ Metadata written to ${INSTANCE_DIR}/metadata.json"
+echo ""
+
+# ── Done ────────────────────────────────────────────────────────────────────
 echo "════════════════════════════════════════════════════════════════"
-echo "  ✅ Bootstrap complete!"
+echo "  ✅ Provisioning Complete"
 echo ""
-echo "  Next steps:"
-echo "  1. SSH in:  ssh -i $SSH_KEY_PATH root@$SERVER_IP"
-echo "  2. Run Claude Code to set up OpenClaw:"
-echo "     ANTHROPIC_API_KEY=sk-ant-... claude"
-echo "     Then paste the prompt from 03-claude-code-setup-prompt.md"
+echo "  Server:  $NAME"
+echo "  IP:      $SERVER_IP"
+echo "  Region:  $REGION"
+echo "  SSH:     ssh -i $SSH_KEY_PATH root@$SERVER_IP"
 echo ""
-echo "  Or run it non-interactively:"
-echo "     ANTHROPIC_API_KEY=sk-ant-... claude --print < /root/03-claude-code-setup-prompt.md"
+echo "  Metadata: ${INSTANCE_DIR}/metadata.json"
 echo "════════════════════════════════════════════════════════════════"
