@@ -68,6 +68,21 @@
 - Syntax verified with bash -n
 - All requirements met per specs/prd-v1.json task 8
 
+## 2026-02-13 19:00
+- ✅ Task 9: verify.sh created and verified
+- Script runs full 10-point verification checklist via SSH
+- Checks: SSH connectivity, OpenClaw version, gateway status, systemd service,
+  Tailscale status, Telegram channel, healthcheck timer, UFW firewall,
+  disk space (>50% free threshold), memory usage (<90% threshold)
+- Generates QUICKREF.md on VM with access info, commands, troubleshooting
+- QUICKREF includes: server IPs, SSH commands, service status commands,
+  Telegram bot info, monitoring commands, system resources, useful commands
+- Updates instance metadata status to "operational" (all pass) or "degraded" (any fail)
+- Color-coded output: green=pass, red=fail, yellow=warn, blue=info
+- Graceful error handling with detailed failure reporting
+- Syntax verified with bash -n
+- All requirements met per specs/prd-v1.json task 9
+
 ## Tasks
 1. ✅ provision.sh - create VM
 2. ✅ bootstrap.sh - install Node + Claude Code
@@ -76,7 +91,7 @@
 5. ✅ setup-tailscale.sh - run Claude Code for Tailscale
 6. ✅ setup-skills.sh - whisper + clawhub
 7. ✅ setup-monitoring.sh - healthcheck timer
-8. verify.sh - full checklist
+8. ✅ verify.sh - full checklist
 9. deploy.sh - master orchestrator
 10. destroy.sh - teardown
 11. status.sh + list.sh - management
