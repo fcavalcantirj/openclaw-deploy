@@ -18,7 +18,7 @@
 
 ### Telegram & User Onboarding (3)
 - setup-telegram-bot.sh ✓ — configure bot token
-- approve-user.sh — pairing approval
+- approve-user.sh ✓ — pairing approval with list/approve by code
 - user-onboard.sh — full user flow
 
 ### Messaging (2)
