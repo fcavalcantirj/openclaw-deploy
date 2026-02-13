@@ -19,7 +19,7 @@
 ### Telegram & User Onboarding (3)
 - setup-telegram-bot.sh ✓ — configure bot token
 - approve-user.sh ✓ — pairing approval with list/approve by code
-- user-onboard.sh — full user flow
+- user-onboard.sh ✓ — full user flow orchestration
 
 ### Messaging (2)
 - send-message.sh — send to child instances
