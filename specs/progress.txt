@@ -24,5 +24,17 @@
 - Security verified: credentials.json is in .gitignore
 - Status: **COMPLETE**
 
+### Task #3: Provision - Create provision.sh script ✓
+- Tested provision.sh with test VM (test-provision-001)
+- Successfully created Hetzner VM (cx23, ubuntu-24.04, nbg1)
+- Generated SSH key: ed25519 format
+- Uploaded SSH key to Hetzner
+- Verified SSH connectivity: ssh root@IP 'echo ok' returned "ok"
+- Metadata correctly written to instances/{name}/metadata.json
+- All fields present: name, ip, region, server_type, status, created_at, ssh_key_path
+- Status field correctly set to "provisioned"
+- Clean up tested: deleted VM, SSH key, and local files successfully
+- Status: **COMPLETE**
+
 ## Next
-- Task #3: Create provision.sh script for VM provisioning
+- Task #4: Create bootstrap.sh for installing Node 22 and Claude Code on VM
