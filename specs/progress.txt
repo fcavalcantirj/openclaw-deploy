@@ -26,12 +26,25 @@
 - Configures loopback bind, token auth, telegram channel, chatCompletions endpoint
 - All requirements met and exceeded
 
+## 2026-02-13 16:00
+- ✅ Task 6: setup-tailscale.sh created and verified
+- Script accepts instance name and Anthropic API key
+- Creates prompts/setup-tailscale.md for Claude Code on VM
+- Installs Tailscale via official script
+- Captures and displays auth URL prominently for user
+- Polls status until authentication complete
+- Retrieves and displays Tailscale IP (100.x.x.x)
+- Updates instance metadata with Tailscale IP
+- Idempotent: skips if Tailscale already connected
+- Graceful error handling with troubleshooting steps
+- All requirements met per specs/prd-v1.json task 6
+
 ## Tasks
 1. ✅ provision.sh - create VM
 2. ✅ bootstrap.sh - install Node + Claude Code
 3. ✅ setup-openclaw.sh - run Claude Code for OpenClaw
 4. ✅ prompts/setup-openclaw.md - the prompt
-5. setup-tailscale.sh - run Claude Code for Tailscale  
+5. ✅ setup-tailscale.sh - run Claude Code for Tailscale
 6. setup-skills.sh - whisper + clawhub
 7. setup-monitoring.sh - healthcheck timer
 8. verify.sh - full checklist
