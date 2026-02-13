@@ -52,6 +52,22 @@
 - Syntax verified with bash -n
 - All requirements met per specs/prd-v1.json task 7
 
+## 2026-02-13 18:00
+- ✅ Task 8: setup-monitoring.sh created and verified
+- Script creates ~/scripts/healthcheck.sh on VM
+- Healthcheck monitors: gateway status, port 18789, disk space, memory
+- Creates systemd user timer with 5-minute interval
+- Creates systemd service unit for oneshot execution
+- Configures logrotate for healthcheck logs (7-day rotation)
+- Runs initial healthcheck to verify functionality
+- Verifies timer is active and shows next run time
+- Updates instance metadata status to "monitoring-configured"
+- Idempotent: skips if timer already active
+- Includes comprehensive logging to ~/logs/healthcheck.log
+- Graceful error handling with clear status messages
+- Syntax verified with bash -n
+- All requirements met per specs/prd-v1.json task 8
+
 ## Tasks
 1. ✅ provision.sh - create VM
 2. ✅ bootstrap.sh - install Node + Claude Code
@@ -59,7 +75,7 @@
 4. ✅ prompts/setup-openclaw.md - the prompt
 5. ✅ setup-tailscale.sh - run Claude Code for Tailscale
 6. ✅ setup-skills.sh - whisper + clawhub
-7. setup-monitoring.sh - healthcheck timer
+7. ✅ setup-monitoring.sh - healthcheck timer
 8. verify.sh - full checklist
 9. deploy.sh - master orchestrator
 10. destroy.sh - teardown
