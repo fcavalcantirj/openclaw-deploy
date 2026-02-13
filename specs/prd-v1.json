@@ -23,6 +23,6 @@
   {"category": "monitoring","description": "Create monitor-all.sh that checks ALL instances and alerts on issues","passes": true},
   {"category": "monitoring","description": "Add cron/heartbeat integration to monitor children from parent Claw","passes": false},
   {"category": "recovery","description": "Create resuscitate.sh to recover crashed/unresponsive instances","passes": true},
-  {"category": "skill","description": "Create SKILL.md to package this as a proper OpenClaw skill","passes": false},
+  {"category": "skill","description": "Create SKILL.md to package this as a proper OpenClaw skill","passes": true},
   {"category": "documentation","description": "Create comprehensive README with all workflows and examples","passes": false}
 ]

@@ -39,7 +39,7 @@
 - resuscitate.sh ✓ — recover crashed instances
 
 ### Skill Packaging (2)
-- SKILL.md — package as skill
+- SKILL.md ✓ — package as skill
 - README.md — comprehensive docs
 
 ## Vision
