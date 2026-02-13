@@ -16,11 +16,21 @@
 - Syntax verified with bash -n
 - All requirements met per specs/prd-v1.json task 2
 
+## 2026-02-13 15:00
+- ✅ Task 3: setup-openclaw.sh created
+- Script accepts instance name and Anthropic API key
+- SSHs to VM, copies setup prompt, runs Claude Code
+- Handles errors gracefully, updates metadata status
+- ✅ Task 4: prompts/setup-openclaw.md verified
+- Comprehensive 5-phase setup: OpenClaw install, config, Tailscale, monitoring, quickref
+- Configures loopback bind, token auth, telegram channel, chatCompletions endpoint
+- All requirements met and exceeded
+
 ## Tasks
 1. ✅ provision.sh - create VM
 2. ✅ bootstrap.sh - install Node + Claude Code
-3. setup-openclaw.sh - run Claude Code for OpenClaw
-4. prompts/setup-openclaw.md - the prompt
+3. ✅ setup-openclaw.sh - run Claude Code for OpenClaw
+4. ✅ prompts/setup-openclaw.md - the prompt
 5. setup-tailscale.sh - run Claude Code for Tailscale  
 6. setup-skills.sh - whisper + clawhub
 7. setup-monitoring.sh - healthcheck timer
