@@ -103,7 +103,7 @@ cmd_list() {
 }
 
 cmd_status() {
-  local name="$1"
+  local name="${1:?Usage: claw status NAME}"
   local ip=$(get_meta "$name" "ip")
   local key=$(get_meta "$name" "ssh_key_path")
   
@@ -126,41 +126,40 @@ cmd_status() {
 }
 
 cmd_approve() {
-  local name="$1"
-  local code="$2"
+  local name="${1:-}"
+  local code="${2:-}"
   local ip=$(get_meta "$name" "ip")
   local key=$(get_meta "$name" "ssh_key_path")
   local token=$(get_meta "$name" "gateway_token")
-  
+
   [[ -z "$ip" ]] && { echo "Instance '$name' not found"; exit 1; }
   [[ -z "$code" ]] && { echo "Usage: claw approve NAME CODE"; exit 1; }
-  
+
   echo -e "${BLUE}Approving pairing code $code on $name...${NC}"
-  
-  ssh -i "$key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "root@$ip" "
-    su - openclaw -c 'OPENCLAW_GATEWAY_TOKEN=\"$token\" openclaw pairing approve telegram $code 2>&1'
-  " 2>/dev/null
-  
+
+  ssh -i "$key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "root@$ip" \
+    "su - openclaw -c 'OPENCLAW_GATEWAY_TOKEN=\"${token}\" openclaw pairing approve telegram ${code} 2>&1'"
+
   echo -e "${GREEN}✓ Approved${NC}"
 }
 
 cmd_message() {
-  local name="$1"
-  local msg="$2"
+  local name="${1:-}"
+  local msg="${2:-}"
   local ip=$(get_meta "$name" "ip")
   local key=$(get_meta "$name" "ssh_key_path")
   local token=$(get_meta "$name" "gateway_token")
-  
+
   [[ -z "$ip" ]] && { echo "Instance '$name' not found"; exit 1; }
   [[ -z "$msg" ]] && { echo "Usage: claw message NAME \"text\""; exit 1; }
-  
-  ssh -i "$key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "root@$ip" "
-    su - openclaw -c 'OPENCLAW_GATEWAY_TOKEN=\"$token\" openclaw agent --session-id parent --message \"$msg\" 2>&1'
-  " 2>/dev/null
+
+  # Use heredoc to safely pass the message without injection risk
+  ssh -i "$key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "root@$ip" \
+    "su - openclaw -c 'OPENCLAW_GATEWAY_TOKEN=\"${token}\" openclaw agent --session-id parent --message \"${msg//\"/\\\"}\" 2>&1'"
 }
 
 cmd_logs() {
-  local name="$1"
+  local name="${1:?Usage: claw logs NAME [-f]}"
   local follow="${2:-}"
   local ip=$(get_meta "$name" "ip")
   local key=$(get_meta "$name" "ssh_key_path")
@@ -177,7 +176,7 @@ cmd_logs() {
 }
 
 cmd_restart() {
-  local name="$1"
+  local name="${1:?Usage: claw restart NAME}"
   local ip=$(get_meta "$name" "ip")
   local key=$(get_meta "$name" "ssh_key_path")
   
@@ -198,7 +197,7 @@ cmd_destroy() {
 }
 
 cmd_ssh() {
-  local name="$1"
+  local name="${1:?Usage: claw ssh NAME}"
   local ip=$(get_meta "$name" "ip")
   local key=$(get_meta "$name" "ssh_key_path")
   

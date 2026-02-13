@@ -123,14 +123,14 @@ check_instance() {
   fi
 
   local ip=$(jq -r '.ip' "$metadata_file")
-  local ssh_key=$(jq -r '.ssh_key' "$metadata_file")
+  local ssh_key=$(jq -r '.ssh_key_path // .ssh_key // empty' "$metadata_file")
 
   if [ -z "$ip" ] || [ "$ip" = "null" ]; then
     echo "UNKNOWN"
     return
   fi
 
-  if [ ! -f "$ssh_key" ]; then
+  if [ -z "$ssh_key" ] || [ ! -f "$ssh_key" ]; then
     echo "UNKNOWN"
     return
   fi
@@ -188,7 +188,7 @@ get_instance_details() {
   local metadata_file="$instance_dir/metadata.json"
 
   local ip=$(jq -r '.ip' "$metadata_file")
-  local ssh_key=$(jq -r '.ssh_key' "$metadata_file")
+  local ssh_key=$(jq -r '.ssh_key_path // .ssh_key // empty' "$metadata_file")
   local region=$(jq -r '.region // "unknown"' "$metadata_file")
 
   echo "Instance: $instance_name"

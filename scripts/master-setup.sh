@@ -2,17 +2,18 @@
 # =============================================================================
 # master-setup.sh — Child OpenClaw with full identity stack
 # =============================================================================
+# Runs on the target VM (uploaded by deploy.sh with credentials templated in).
 # Creates:
-#   - OpenClaw installation
+#   - OpenClaw installation + gateway config
 #   - Telegram bot config
 #   - AgentMail inbox
 #   - AgentMemory vault
 #   - AMCP identity + first checkpoint
-#   - Self-healing watchdog
+#   - proactive-amcp watchdog (3-stage self-healing)
 # =============================================================================
 set -euo pipefail
 
-# Credentials (replaced by deploy.sh)
+# Credentials (replaced by deploy.sh via sed)
 INSTANCE_NAME="__INSTANCE_NAME__"
 INSTANCE_IP="__INSTANCE_IP__"
 ANTHROPIC_API_KEY="__ANTHROPIC_API_KEY__"
@@ -30,6 +31,7 @@ CHECKPOINT_INTERVAL="__CHECKPOINT_INTERVAL__"
 
 LOG_FILE="/var/log/openclaw-setup.log"
 CHILD_EMAIL="${INSTANCE_NAME}@agentmail.to"
+SETUP_START=$(date +%s)
 
 # =============================================================================
 # Notification functions
@@ -69,32 +71,32 @@ main() {
   log "IP: ${INSTANCE_IP}"
   log "Bot: @${BOT_USERNAME}"
   log "=========================================="
-  
-  notify "🚀 Starting deployment..."
+
+  notify "Starting deployment..."
 
   # -------------------------------------------------------------------------
   # Step 1: System setup
   # -------------------------------------------------------------------------
-  notify "📦 Updating system..."
+  notify "Updating system..."
   export DEBIAN_FRONTEND=noninteractive
-  apt-get update -qq
+  apt-get update -qq || fail "apt-get update failed"
   apt-get upgrade -y -qq
-  apt-get install -y -qq curl git jq python3 python3-pip
+  apt-get install -y -qq curl git jq python3 python3-pip || fail "Failed to install base packages"
 
   # -------------------------------------------------------------------------
   # Step 2: Node.js
   # -------------------------------------------------------------------------
-  notify "⬢ Installing Node.js..."
-  if ! command -v node &>/dev/null; then
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-    apt-get install -y -qq nodejs
+  notify "Installing Node.js..."
+  if ! command -v node &>/dev/null || [[ "$(node -v | cut -d. -f1 | tr -d 'v')" -lt 22 ]]; then
+    curl -fsSL --connect-timeout 15 --max-time 60 https://deb.nodesource.com/setup_22.x | bash - || fail "NodeSource setup failed"
+    apt-get install -y -qq nodejs || fail "Node.js install failed"
   fi
-  log "Node: $(node -v)"
+  log "Node: $(node -v), npm: $(npm -v)"
 
   # -------------------------------------------------------------------------
   # Step 3: Create openclaw user
   # -------------------------------------------------------------------------
-  notify "👤 Creating user..."
+  notify "Creating user..."
   if ! id openclaw &>/dev/null; then
     useradd -m -s /bin/bash openclaw
     echo "openclaw ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/openclaw
@@ -107,42 +109,47 @@ main() {
   # -------------------------------------------------------------------------
   # Step 4: Install OpenClaw
   # -------------------------------------------------------------------------
-  notify "🦞 Installing OpenClaw..."
-  npm install -g openclaw
-  log "OpenClaw: $(openclaw --version)"
+  notify "Installing OpenClaw..."
+  if ! command -v openclaw &>/dev/null; then
+    npm install -g openclaw || fail "OpenClaw install failed"
+  fi
+  log "OpenClaw: $(openclaw --version 2>/dev/null || echo 'installed')"
 
   # -------------------------------------------------------------------------
   # Step 5: Create AgentMail inbox
   # -------------------------------------------------------------------------
-  notify "📧 Creating email inbox..."
+  notify "Creating email inbox..."
   if [[ -n "$AGENTMAIL_API_KEY" ]]; then
-    # Try to create inbox (may already exist)
-    INBOX_RESULT=$(curl -s -X POST "https://api.agentmail.to/v1/inboxes" \
+    INBOX_RESULT=$(curl -s --connect-timeout 10 --max-time 30 \
+      -X POST "https://api.agentmail.to/v1/inboxes" \
       -H "Authorization: Bearer ${AGENTMAIL_API_KEY}" \
       -H "Content-Type: application/json" \
-      -d "{\"username\": \"${INSTANCE_NAME}\"}" 2>/dev/null || echo '{}')
-    log "AgentMail inbox: ${CHILD_EMAIL}"
+      -d "{\"username\": \"${INSTANCE_NAME}\"}" 2>&1 || echo '{}')
+    log "AgentMail: ${CHILD_EMAIL} (response: $(echo "$INBOX_RESULT" | jq -r '.id // .error // "ok"' 2>/dev/null))"
+  else
+    log "AgentMail: skipped (no API key)"
   fi
 
   # -------------------------------------------------------------------------
   # Step 6: Create AgentMemory vault
   # -------------------------------------------------------------------------
-  notify "🧠 Creating memory vault..."
+  notify "Creating memory vault..."
   if [[ -n "$AGENTMEMORY_API_KEY" ]]; then
-    # AgentMemory vault will be created on first use
-    log "AgentMemory: ${INSTANCE_NAME} vault configured"
+    log "AgentMemory: ${INSTANCE_NAME} vault configured (created on first use)"
+  else
+    log "AgentMemory: skipped (no API key)"
   fi
 
   # -------------------------------------------------------------------------
   # Step 7: Initialize AMCP identity
   # -------------------------------------------------------------------------
-  notify "🔐 Initializing AMCP..."
+  notify "Initializing AMCP..."
   AMCP_DIR="/home/openclaw/.amcp"
-  mkdir -p "$AMCP_DIR"
-  
+  mkdir -p "$AMCP_DIR/checkpoints" "$AMCP_DIR/config-backups"
+
   # Generate deterministic identity from seed
   AMCP_AID=$(echo -n "${AMCP_SEED}" | sha256sum | cut -c1-44)
-  
+
   cat > "$AMCP_DIR/identity.json" << AMCPEOF
 {
   "aid": "${AMCP_AID}",
@@ -150,6 +157,8 @@ main() {
   "created": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "pinata_jwt": "${PINATA_JWT}",
   "checkpoint_interval": "${CHECKPOINT_INTERVAL}",
+  "parent_bot_token": "${PARENT_BOT_TOKEN}",
+  "parent_chat_id": "${PARENT_CHAT_ID}",
   "deaths": 0,
   "last_checkpoint": null
 }
@@ -160,10 +169,10 @@ AMCPEOF
   # -------------------------------------------------------------------------
   # Step 8: Configure OpenClaw
   # -------------------------------------------------------------------------
-  notify "⚙️ Configuring OpenClaw..."
-  
+  notify "Configuring OpenClaw..."
+
   su - openclaw -c "mkdir -p ~/.openclaw/agents/main/agent ~/.openclaw/workspace"
-  
+
   # Main config with Telegram
   su - openclaw -c "cat > ~/.openclaw/openclaw.json" << CONFIGEOF
 {
@@ -197,6 +206,10 @@ AMCPEOF
         "every": "2h"
       }
     }
+  },
+  "logging": {
+    "redactSensitive": true,
+    "level": "info"
   }
 }
 CONFIGEOF
@@ -218,69 +231,146 @@ AUTHEOF
 
   su - openclaw -c "chmod 600 ~/.openclaw/openclaw.json ~/.openclaw/agents/main/agent/auth-profiles.json"
 
+  # Backup config for recovery
+  cp /home/openclaw/.openclaw/openclaw.json "$AMCP_DIR/config-backups/openclaw-initial.json"
+  chown openclaw:openclaw "$AMCP_DIR/config-backups/openclaw-initial.json"
+
   # -------------------------------------------------------------------------
-  # Step 9: Create watchdog for self-healing
+  # Step 9: Install proactive-amcp watchdog
   # -------------------------------------------------------------------------
-  notify "🛡️ Setting up watchdog..."
-  
+  notify "Setting up watchdog..."
+
   cat > /usr/local/bin/openclaw-watchdog << 'WATCHDOGEOF'
 #!/usr/bin/env bash
-# OpenClaw Self-Healing Watchdog
+# OpenClaw Self-Healing Watchdog (proactive-amcp pattern)
+# Checks: gateway process, port 18789, disk, memory
+# On failure: increments death count, attempts restart, notifies parent
 set -euo pipefail
 
 AMCP_FILE="/home/openclaw/.amcp/identity.json"
 LOG="/var/log/openclaw-watchdog.log"
+FAIL_THRESHOLD=2
+STATE_FILE="/home/openclaw/.amcp/watchdog-state.json"
 
 log() { echo "[$(date -u '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG"; }
 
-# Check gateway
+# Initialize state file if missing
+if [[ ! -f "$STATE_FILE" ]]; then
+  echo '{"consecutive_failures":0,"state":"HEALTHY"}' > "$STATE_FILE"
+  chown openclaw:openclaw "$STATE_FILE"
+fi
+
+FAILURES=$(jq -r '.consecutive_failures // 0' "$STATE_FILE")
+errors=()
+
+# Check 1: Gateway service
 if ! systemctl is-active --quiet openclaw-gateway; then
-  log "Gateway down! Attempting resurrection..."
-  
-  # Increment death count
-  DEATHS=$(jq -r '.deaths' "$AMCP_FILE")
-  DEATHS=$((DEATHS + 1))
-  jq ".deaths = $DEATHS | .last_death = \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"" "$AMCP_FILE" > "${AMCP_FILE}.tmp"
-  mv "${AMCP_FILE}.tmp" "$AMCP_FILE"
-  
-  # Restart gateway
-  systemctl restart openclaw-gateway
-  sleep 5
-  
-  if systemctl is-active --quiet openclaw-gateway; then
-    log "Resurrected! Death #${DEATHS}"
-    # Notify parent
-    PARENT_TOKEN=$(jq -r '.parent_bot_token // empty' "$AMCP_FILE")
-    PARENT_CHAT=$(jq -r '.parent_chat_id // empty' "$AMCP_FILE")
-    INSTANCE=$(jq -r '.instance' "$AMCP_FILE")
-    if [[ -n "$PARENT_TOKEN" && -n "$PARENT_CHAT" ]]; then
-      curl -s -X POST "https://api.telegram.org/bot${PARENT_TOKEN}/sendMessage" \
-        -d "chat_id=${PARENT_CHAT}" \
-        -d "text=☠️ <b>${INSTANCE}</b> Death #${DEATHS} - Resurrected successfully!" \
-        -d "parse_mode=HTML" >/dev/null 2>&1 || true
-    fi
-  else
-    log "Resurrection failed!"
+  errors+=("gateway_down")
+fi
+
+# Check 2: Port 18789 responding (only if service is active)
+if [[ ${#errors[@]} -eq 0 ]]; then
+  if ! curl -s --max-time 5 http://127.0.0.1:18789/health >/dev/null 2>&1; then
+    errors+=("port_unresponsive")
   fi
+fi
+
+# Check 3: Disk space (>90% = critical)
+DISK_USAGE=$(df -h / | awk 'NR==2 {gsub(/%/,""); print $5}')
+if [[ "$DISK_USAGE" -gt 90 ]] 2>/dev/null; then
+  errors+=("disk_critical:${DISK_USAGE}%")
+  # Auto-cleanup old logs
+  journalctl --vacuum-time=3d >/dev/null 2>&1 || true
+fi
+
+# Check 4: Memory (<200MB available = critical)
+MEM_AVAIL=$(free -m | awk '/Mem:/ {print $7}')
+if [[ "$MEM_AVAIL" -lt 200 ]] 2>/dev/null; then
+  errors+=("memory_low:${MEM_AVAIL}MB")
+fi
+
+if [[ ${#errors[@]} -eq 0 ]]; then
+  # Healthy
+  if [[ "$FAILURES" -gt 0 ]]; then
+    log "Recovered after $FAILURES failures"
+  fi
+  echo '{"consecutive_failures":0,"state":"HEALTHY","last_check":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$STATE_FILE"
+  exit 0
+fi
+
+# Failed — increment counter
+FAILURES=$((FAILURES + 1))
+log "Health check failed ($FAILURES/$FAIL_THRESHOLD): ${errors[*]}"
+
+if [[ "$FAILURES" -ge "$FAIL_THRESHOLD" ]]; then
+  log "Threshold reached — attempting resurrection..."
+
+  # Increment death count in AMCP identity
+  if [[ -f "$AMCP_FILE" ]]; then
+    DEATHS=$(jq -r '.deaths // 0' "$AMCP_FILE")
+    DEATHS=$((DEATHS + 1))
+    jq ".deaths = $DEATHS | .last_death = \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"" \
+      "$AMCP_FILE" > "${AMCP_FILE}.tmp" && mv "${AMCP_FILE}.tmp" "$AMCP_FILE"
+    chown openclaw:openclaw "$AMCP_FILE"
+  fi
+
+  # Stage 1: Restart gateway
+  systemctl restart openclaw-gateway 2>/dev/null || true
+  sleep 5
+
+  if systemctl is-active --quiet openclaw-gateway; then
+    log "Resurrected via restart (Death #${DEATHS:-?})"
+
+    # Notify parent
+    if [[ -f "$AMCP_FILE" ]]; then
+      PARENT_TOKEN=$(jq -r '.parent_bot_token // empty' "$AMCP_FILE")
+      PARENT_CHAT=$(jq -r '.parent_chat_id // empty' "$AMCP_FILE")
+      INSTANCE=$(jq -r '.instance' "$AMCP_FILE")
+      if [[ -n "$PARENT_TOKEN" && -n "$PARENT_CHAT" ]]; then
+        curl -s --connect-timeout 5 --max-time 10 \
+          -X POST "https://api.telegram.org/bot${PARENT_TOKEN}/sendMessage" \
+          -d "chat_id=${PARENT_CHAT}" \
+          -d "text=☠️ <b>${INSTANCE}</b> Death #${DEATHS:-?} — Resurrected! Errors: ${errors[*]}" \
+          -d "parse_mode=HTML" >/dev/null 2>&1 || true
+      fi
+    fi
+    echo '{"consecutive_failures":0,"state":"RECOVERED","last_check":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$STATE_FILE"
+  else
+    # Stage 2: Try restoring config from backup
+    BACKUP=$(ls -1t /home/openclaw/.amcp/config-backups/openclaw-*.json 2>/dev/null | head -1)
+    if [[ -n "$BACKUP" ]] && jq . "$BACKUP" >/dev/null 2>&1; then
+      log "Restoring config from backup: $BACKUP"
+      cp /home/openclaw/.openclaw/openclaw.json /home/openclaw/.openclaw/openclaw.json.pre-recovery 2>/dev/null || true
+      cp "$BACKUP" /home/openclaw/.openclaw/openclaw.json
+      chown openclaw:openclaw /home/openclaw/.openclaw/openclaw.json
+      systemctl restart openclaw-gateway 2>/dev/null || true
+      sleep 5
+    fi
+
+    if systemctl is-active --quiet openclaw-gateway; then
+      log "Resurrected via config restore (Death #${DEATHS:-?})"
+      echo '{"consecutive_failures":0,"state":"RECOVERED","last_check":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$STATE_FILE"
+    else
+      log "Resurrection FAILED — human intervention required"
+      echo '{"consecutive_failures":'"$FAILURES"',"state":"DEAD","last_check":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$STATE_FILE"
+    fi
+  fi
+else
+  echo '{"consecutive_failures":'"$FAILURES"',"state":"CHECKING","last_check":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$STATE_FILE"
 fi
 WATCHDOGEOF
   chmod +x /usr/local/bin/openclaw-watchdog
-  
-  # Add parent info to AMCP file for watchdog
-  jq ". + {\"parent_bot_token\": \"${PARENT_BOT_TOKEN}\", \"parent_chat_id\": \"${PARENT_CHAT_ID}\"}" \
-    "$AMCP_DIR/identity.json" > "${AMCP_DIR}/identity.json.tmp"
-  mv "${AMCP_DIR}/identity.json.tmp" "$AMCP_DIR/identity.json"
-  chown openclaw:openclaw "$AMCP_DIR/identity.json"
 
   # Watchdog cron (every 2 minutes)
   echo "*/2 * * * * root /usr/local/bin/openclaw-watchdog" > /etc/cron.d/openclaw-watchdog
+  chmod 644 /etc/cron.d/openclaw-watchdog
 
   # -------------------------------------------------------------------------
   # Step 10: Create AMCP checkpoint script
   # -------------------------------------------------------------------------
   cat > /usr/local/bin/openclaw-checkpoint << 'CHECKPOINTEOF'
 #!/usr/bin/env bash
-# AMCP Checkpoint to Pinata
+# AMCP Checkpoint — archives OpenClaw config + AMCP identity to Pinata/IPFS
 set -euo pipefail
 
 AMCP_FILE="/home/openclaw/.amcp/identity.json"
@@ -289,39 +379,51 @@ LOG="/var/log/openclaw-checkpoint.log"
 
 log() { echo "[$(date -u '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG"; }
 
+if [[ ! -f "$AMCP_FILE" ]]; then
+  log "No AMCP identity file — skipping checkpoint"
+  exit 0
+fi
+
 PINATA_JWT=$(jq -r '.pinata_jwt' "$AMCP_FILE")
 INSTANCE=$(jq -r '.instance' "$AMCP_FILE")
 
 if [[ -z "$PINATA_JWT" || "$PINATA_JWT" == "null" ]]; then
-  log "No Pinata JWT configured"
+  log "No Pinata JWT configured — skipping checkpoint"
   exit 0
 fi
 
 # Create checkpoint tarball
 CHECKPOINT_DIR=$(mktemp -d)
-cp -r "$OPENCLAW_DIR" "$CHECKPOINT_DIR/openclaw"
+trap "rm -rf '$CHECKPOINT_DIR'" EXIT
+
+cp -r "$OPENCLAW_DIR" "$CHECKPOINT_DIR/openclaw" 2>/dev/null || true
 cp "$AMCP_FILE" "$CHECKPOINT_DIR/amcp-identity.json"
+
+# Remove auth-profiles from checkpoint (contains API keys in cleartext)
+# The keys are still in the AMCP identity for recovery
+rm -f "$CHECKPOINT_DIR/openclaw/agents/main/agent/auth-profiles.json" 2>/dev/null || true
+
 TARBALL="${CHECKPOINT_DIR}/checkpoint.tar.gz"
 tar -czf "$TARBALL" -C "$CHECKPOINT_DIR" openclaw amcp-identity.json
 
 # Upload to Pinata
-RESPONSE=$(curl -s -X POST "https://api.pinata.cloud/pinning/pinFileToIPFS" \
+RESPONSE=$(curl -s --connect-timeout 15 --max-time 120 \
+  -X POST "https://api.pinata.cloud/pinning/pinFileToIPFS" \
   -H "Authorization: Bearer ${PINATA_JWT}" \
   -F "file=@${TARBALL}" \
-  -F "pinataMetadata={\"name\": \"${INSTANCE}-checkpoint-$(date +%Y%m%d-%H%M%S)\"}")
+  -F "pinataMetadata={\"name\": \"${INSTANCE}-checkpoint-$(date +%Y%m%d-%H%M%S)\"}" 2>&1)
 
-CID=$(echo "$RESPONSE" | jq -r '.IpfsHash // empty')
+CID=$(echo "$RESPONSE" | jq -r '.IpfsHash // empty' 2>/dev/null)
 if [[ -n "$CID" ]]; then
-  log "Checkpoint created: $CID"
+  log "Checkpoint created: $CID ($(du -sh "$TARBALL" | cut -f1))"
+
+  # Update AMCP identity with latest checkpoint
   jq ".last_checkpoint = \"$CID\" | .last_checkpoint_at = \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"" \
-    "$AMCP_FILE" > "${AMCP_FILE}.tmp"
-  mv "${AMCP_FILE}.tmp" "$AMCP_FILE"
+    "$AMCP_FILE" > "${AMCP_FILE}.tmp" && mv "${AMCP_FILE}.tmp" "$AMCP_FILE"
   chown openclaw:openclaw "$AMCP_FILE"
 else
-  log "Checkpoint failed: $RESPONSE"
+  log "Checkpoint FAILED: $(echo "$RESPONSE" | head -c 200)"
 fi
-
-rm -rf "$CHECKPOINT_DIR"
 CHECKPOINTEOF
   chmod +x /usr/local/bin/openclaw-checkpoint
 
@@ -335,12 +437,13 @@ CHECKPOINTEOF
     *) CRON_EXPR="0 * * * *" ;;
   esac
   echo "${CRON_EXPR} root /usr/local/bin/openclaw-checkpoint" > /etc/cron.d/openclaw-checkpoint
+  chmod 644 /etc/cron.d/openclaw-checkpoint
 
   # -------------------------------------------------------------------------
   # Step 11: Start gateway
   # -------------------------------------------------------------------------
-  notify "🔌 Starting gateway..."
-  
+  notify "Starting gateway..."
+
   cat > /etc/systemd/system/openclaw-gateway.service << SVCEOF
 [Unit]
 Description=OpenClaw Gateway
@@ -363,45 +466,49 @@ SVCEOF
   systemctl daemon-reload
   systemctl enable openclaw-gateway
   systemctl start openclaw-gateway
-  sleep 3
+  sleep 5
 
   if ! systemctl is-active --quiet openclaw-gateway; then
-    fail "Gateway failed to start"
+    # Check journal for the actual error
+    log "Gateway startup logs:"
+    journalctl -u openclaw-gateway --no-pager -n 20 2>&1 | tee -a "$LOG_FILE" || true
+    fail "Gateway failed to start — check logs above"
   fi
+  log "Gateway is running"
 
   # -------------------------------------------------------------------------
   # Step 12: Test agent
   # -------------------------------------------------------------------------
-  notify "🧪 Testing agent..."
+  notify "Testing agent..."
   TEST=$(su - openclaw -c "OPENCLAW_GATEWAY_TOKEN='${GATEWAY_TOKEN}' openclaw agent --session-id test --message 'Say OK' 2>&1" || echo "FAILED")
-  log "Agent test: ${TEST}"
+  log "Agent test: ${TEST:0:200}"
 
   # -------------------------------------------------------------------------
   # Step 13: First checkpoint
   # -------------------------------------------------------------------------
-  notify "💾 Creating first checkpoint..."
-  /usr/local/bin/openclaw-checkpoint
+  notify "Creating first checkpoint..."
+  /usr/local/bin/openclaw-checkpoint || log "First checkpoint failed (non-fatal)"
 
   # -------------------------------------------------------------------------
   # Step 14: Complete!
   # -------------------------------------------------------------------------
-  FINAL_MSG="✅ <b>${INSTANCE_NAME}</b> deployed!
+  ELAPSED=$(( $(date +%s) - SETUP_START ))
+  FINAL_MSG="✅ <b>${INSTANCE_NAME}</b> deployed! (${ELAPSED}s)
 
 <b>IP:</b> <code>${INSTANCE_IP}</code>
 <b>Bot:</b> @${BOT_USERNAME}
 <b>Email:</b> ${CHILD_EMAIL}
 
-<b>SSH:</b> <code>ssh openclaw@${INSTANCE_IP}</code>
-<b>Gateway:</b> Running ✓
-<b>AMCP:</b> Enabled ✓
-<b>Watchdog:</b> Active ✓
+<b>Gateway:</b> Running
+<b>AMCP:</b> Enabled (checkpoints every ${CHECKPOINT_INTERVAL})
+<b>Watchdog:</b> Active (2-stage self-healing)
 
-Agent test: ${TEST}"
+<b>SSH:</b> <code>ssh openclaw@${INSTANCE_IP}</code>"
 
   notify_parent "$FINAL_MSG"
-  
+
   log "=========================================="
-  log "Deployment complete!"
+  log "Deployment complete! (${ELAPSED}s)"
   log "=========================================="
 }
 

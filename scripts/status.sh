@@ -69,7 +69,7 @@ STATUS=$(jq -r '.status // "unknown"' "$METADATA_FILE")
 CREATED_AT=$(jq -r '.created_at // "unknown"' "$METADATA_FILE")
 OPENCLAW_VERSION=$(jq -r '.openclaw_version // "unknown"' "$METADATA_FILE")
 TELEGRAM_BOT=$(jq -r '.telegram_bot // "not configured"' "$METADATA_FILE")
-SSH_KEY=$(jq -r '.ssh_key // ""' "$METADATA_FILE")
+SSH_KEY=$(jq -r '.ssh_key_path // .ssh_key // ""' "$METADATA_FILE")
 
 # Display basic info
 print_status "$BLUE" "═══════════════════════════════════════════════════"

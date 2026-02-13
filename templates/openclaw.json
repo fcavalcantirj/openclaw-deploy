@@ -1,32 +1,37 @@
 {
   "gateway": {
+    "mode": "local",
     "bind": "loopback",
     "port": 18789,
     "auth": {
-      "mode": "token"
+      "mode": "token",
+      "token": "GATEWAY_TOKEN_PLACEHOLDER"
     }
   },
   "channels": {
     "telegram": {
       "enabled": true,
-      "dmPolicy": "pairing",
-      "token": "TELEGRAM_BOT_TOKEN_PLACEHOLDER"
+      "botToken": "TELEGRAM_BOT_TOKEN_PLACEHOLDER",
+      "dmPolicy": "pairing"
     }
   },
-  "http": {
-    "chatCompletions": {
-      "enabled": true,
-      "allowedOrigins": ["*"]
+  "plugins": {
+    "entries": {
+      "telegram": {
+        "enabled": true
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "workspace": "/home/openclaw/.openclaw/workspace",
+      "heartbeat": {
+        "every": "2h"
+      }
     }
   },
   "logging": {
     "redactSensitive": true,
     "level": "info"
-  },
-  "skills": {
-    "openai-whisper-api": {
-      "enabled": false,
-      "apiKey": "OPENAI_API_KEY_PLACEHOLDER"
-    }
   }
 }

@@ -101,8 +101,8 @@ for instance in "${INSTANCES[@]}"; do
   STATUS=$(jq -r '.status // "unknown"' "$METADATA_FILE")
   SERVER_IP=$(jq -r '.ip // "unknown"' "$METADATA_FILE")
   TAILSCALE_IP=$(jq -r '.tailscale_ip // "not set"' "$METADATA_FILE")
-  SSH_KEY=$(jq -r '.ssh_key // ""' "$METADATA_FILE")
-  
+  SSH_KEY=$(jq -r '.ssh_key_path // .ssh_key // ""' "$METADATA_FILE")
+
   # Check reachability
   REACHABLE=$(check_reachable "$SSH_KEY" "$SERVER_IP")
   
@@ -152,7 +152,7 @@ for instance in "${INSTANCES[@]}"; do
   METADATA_FILE="$INSTANCES_DIR/$instance/metadata.json"
   STATUS=$(jq -r '.status // "unknown"' "$METADATA_FILE")
   SERVER_IP=$(jq -r '.ip // "unknown"' "$METADATA_FILE")
-  SSH_KEY=$(jq -r '.ssh_key // ""' "$METADATA_FILE")
+  SSH_KEY=$(jq -r '.ssh_key_path // .ssh_key // ""' "$METADATA_FILE")
   REACHABLE=$(check_reachable "$SSH_KEY" "$SERVER_IP")
   
   if [ "$STATUS" = "operational" ] && [ "$REACHABLE" = "online" ]; then

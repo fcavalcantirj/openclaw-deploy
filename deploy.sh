@@ -29,9 +29,17 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 log_info() { echo -e "${BLUE}[INFO]${NC} $*"; }
-log_success() { echo -e "${GREEN}[✓]${NC} $*"; }
+log_success() { echo -e "${GREEN}[OK]${NC} $*"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+
+# Check prerequisites
+for tool in hcloud jq curl ssh-keygen openssl scp; do
+  if ! command -v "$tool" &>/dev/null; then
+    log_error "Missing required tool: $tool"
+    exit 1
+  fi
+done
 
 usage() {
   cat <<EOF
@@ -185,20 +193,32 @@ SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLeve
 
 # Wait for SSH
 log_info "Waiting for SSH..."
+SSH_READY=false
 for i in {1..30}; do
-  ssh -i "$SSH_KEY_PATH" $SSH_OPTS -o ConnectTimeout=5 "root@${INSTANCE_IP}" "echo ok" &>/dev/null && break
+  if ssh -i "$SSH_KEY_PATH" $SSH_OPTS -o ConnectTimeout=5 "root@${INSTANCE_IP}" "echo ok" &>/dev/null; then
+    SSH_READY=true
+    break
+  fi
   sleep 2
 done
+
+if [[ "$SSH_READY" != "true" ]]; then
+  log_error "SSH connection failed after 30 attempts to ${INSTANCE_IP}"
+  log_error "Server may still be booting. Try: ssh -i ${SSH_KEY_PATH} root@${INSTANCE_IP}"
+  exit 1
+fi
+log_success "SSH connection established"
 
 # =============================================================================
 # Notify parent
 # =============================================================================
-curl -s -X POST "https://api.telegram.org/bot${PARENT_BOT_TOKEN}/sendMessage" \
+curl -s --connect-timeout 5 --max-time 10 \
+  -X POST "https://api.telegram.org/bot${PARENT_BOT_TOKEN}/sendMessage" \
   -d "chat_id=${PARENT_CHAT_ID}" \
   -d "text=🚀 Deploying ${INSTANCE_NAME} @ ${INSTANCE_IP}
 Bot: @${BOT_USERNAME}
 Region: ${REGION}" \
-  -d "parse_mode=HTML" >/dev/null
+  -d "parse_mode=HTML" >/dev/null 2>&1 || log_warn "Failed to notify parent via Telegram"
 
 # =============================================================================
 # Upload and run master setup
@@ -206,6 +226,7 @@ Region: ${REGION}" \
 log_info "Uploading setup script..."
 
 TEMP_SCRIPT=$(mktemp)
+trap "rm -f '$TEMP_SCRIPT'" EXIT
 sed \
   -e "s|__INSTANCE_NAME__|${INSTANCE_NAME}|g" \
   -e "s|__INSTANCE_IP__|${INSTANCE_IP}|g" \
