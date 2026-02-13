@@ -8,5 +8,13 @@
 - Credentials stored (gitignored)
 - hcloud CLI configured and verified
 
+### Task #1: Infrastructure - hcloud verification ✓
+- Verified hcloud CLI installed at /home/clawdbot/bin/hcloud
+- Version: 1.61.0
+- Active context: openclaw
+- Connectivity test: PASSED (hcloud server list works)
+- Created instances/hcloud-verified.json
+- Status: **COMPLETE**
+
 ## Next
-- Work through prd-v1.json tasks
+- Task #2: Store Anthropic API key securely
