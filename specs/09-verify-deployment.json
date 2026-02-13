@@ -1,0 +1,26 @@
+{
+  "category": "verification",
+  "description": "Final verification that OpenClaw instance is fully operational",
+  "steps": [
+    "Load instance metadata from instances/{name}/metadata.json",
+    "Run verification checklist:",
+    "  1. SSH connectivity: `ssh openclaw@{ip} 'echo ok'`",
+    "  2. OpenClaw version: `ssh openclaw@{ip} 'openclaw --version'`",
+    "  3. Gateway status: `ssh openclaw@{ip} 'openclaw gateway status'` should show running",
+    "  4. Systemd service: `ssh openclaw@{ip} 'systemctl --user is-active openclaw-gateway'` should say active",
+    "  5. Tailscale: `ssh openclaw@{ip} 'tailscale status'` should show connected",
+    "  6. Telegram: `ssh openclaw@{ip} 'openclaw channels status'` should show telegram enabled",
+    "  7. Healthcheck timer: `ssh openclaw@{ip} 'systemctl --user is-active openclaw-healthcheck.timer'`",
+    "  8. UFW firewall: `ssh root@{ip} 'ufw status'` should show active",
+    "  9. Disk space: `ssh openclaw@{ip} 'df -h /'` should have >50% free",
+    "  10. Memory: `ssh openclaw@{ip} 'free -h'` should have reasonable free memory",
+    "Count passed checks, report any failures",
+    "If all pass: update metadata.json status=operational, verified_at=timestamp",
+    "If failures: update metadata.json status=degraded, list failures",
+    "Generate quickref card: write instances/{name}/QUICKREF.md with access details"
+  ],
+  "passes": false,
+  "prerequisite": "08-monitoring-setup",
+  "inputs": ["instance_name"],
+  "outputs": ["All checks passed", "Instance marked operational", "QUICKREF.md generated"]
+}

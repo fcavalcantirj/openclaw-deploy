@@ -1,0 +1,21 @@
+{
+  "category": "networking",
+  "description": "Install Tailscale and authenticate the VM to the tailnet",
+  "steps": [
+    "Load instance metadata from instances/{name}/metadata.json",
+    "Check if Tailscale already installed: `ssh root@{ip} 'which tailscale'`",
+    "If not installed: `ssh root@{ip} 'curl -fsSL https://tailscale.com/install.sh | sh'`",
+    "Start Tailscale auth: `ssh root@{ip} 'sudo tailscale up --authkey={key}'` OR without authkey",
+    "If no authkey: capture the auth URL from output",
+    "Present auth URL to user: 'Please click this link to authenticate Tailscale: {url}'",
+    "Poll for authentication: `ssh root@{ip} 'tailscale status'` until connected",
+    "Timeout after 5 minutes if not authenticated",
+    "Get Tailscale IP: `ssh root@{ip} 'tailscale ip -4'`",
+    "Optionally apply tags: `tailscale up --advertise-tags=tag:openclaw-{purpose}`",
+    "Update metadata.json: tailscale_ip={ip}, tailscale_status=connected"
+  ],
+  "passes": false,
+  "prerequisite": "05-run-claude-code",
+  "inputs": ["instance_name", "tailscale_authkey (optional)"],
+  "outputs": ["Tailscale installed", "VM on tailnet", "Tailscale IP recorded"]
+}

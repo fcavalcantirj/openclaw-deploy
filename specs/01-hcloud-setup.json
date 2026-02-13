@@ -1,0 +1,14 @@
+{
+  "category": "infrastructure",
+  "description": "Verify hcloud CLI is configured with Hetzner API token",
+  "steps": [
+    "Check if hcloud CLI is installed: `which hcloud`",
+    "Check if hcloud context exists: `hcloud context active`",
+    "If no context: prompt user to run `hcloud context create openclaw` and paste Hetzner API token",
+    "Verify connectivity: `hcloud server list` should not error",
+    "Store verification timestamp in instances/hcloud-verified.json"
+  ],
+  "passes": false,
+  "prerequisite": null,
+  "outputs": ["hcloud CLI configured and verified"]
+}

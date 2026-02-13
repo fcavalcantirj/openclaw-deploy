@@ -1,0 +1,19 @@
+{
+  "category": "provision",
+  "description": "Bootstrap the VM with Node.js, Claude Code CLI, and system packages",
+  "steps": [
+    "Load instance metadata from instances/{name}/metadata.json",
+    "SCP bootstrap script to VM: `scp scripts/bootstrap.sh root@{ip}:/root/`",
+    "SCP Claude Code prompt to VM: `scp prompts/setup-openclaw.md root@{ip}:/root/`",
+    "Execute bootstrap script via SSH: `ssh root@{ip} 'chmod +x /root/bootstrap.sh && /root/bootstrap.sh'`",
+    "Verify Node.js installed: `ssh root@{ip} 'node -v'` should return v22.x",
+    "Verify Claude Code installed: `ssh root@{ip} 'which claude'` should return path",
+    "Verify openclaw user created: `ssh root@{ip} 'id openclaw'` should succeed",
+    "Verify UFW enabled: `ssh root@{ip} 'ufw status'` should show active",
+    "Update metadata.json: status=bootstrapped"
+  ],
+  "passes": false,
+  "prerequisite": "03-provision-vm",
+  "inputs": ["instance_name"],
+  "outputs": ["Node 22 installed", "Claude Code CLI installed", "openclaw user created", "UFW firewall active"]
+}

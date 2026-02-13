@@ -1,0 +1,21 @@
+{
+  "category": "provision",
+  "description": "Create a new Hetzner VM for OpenClaw instance",
+  "steps": [
+    "Determine instance name: use provided name or generate `openclaw-{purpose}-{region}`",
+    "Check if instance already exists: `hcloud server describe {name}`",
+    "If exists: abort with error or ask user to destroy first",
+    "Generate SSH key if not exists: `ssh-keygen -t ed25519 -f ~/.ssh/openclaw_{name}`",
+    "Upload SSH key to Hetzner: `hcloud ssh-key create --name {name}-key --public-key-from-file`",
+    "Create server: `hcloud server create --name {name} --type cx22 --image ubuntu-24.04 --location {region} --ssh-key {name}-key`",
+    "Wait for server to boot: poll `hcloud server describe {name}` until status=running",
+    "Get server IP: `hcloud server ip {name}`",
+    "Wait 30s for SSH to be ready",
+    "Test SSH connectivity: `ssh -o ConnectTimeout=10 root@{ip} echo ok`",
+    "Create instance metadata: write to instances/{name}/metadata.json with IP, region, created_at, status=provisioned"
+  ],
+  "passes": false,
+  "prerequisite": "01-hcloud-setup",
+  "inputs": ["instance_name (optional)", "region (default: nbg1)", "server_type (default: cx22)"],
+  "outputs": ["VM running", "SSH accessible", "metadata.json created"]
+}
