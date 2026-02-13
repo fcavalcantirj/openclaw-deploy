@@ -1,0 +1,23 @@
+# Credentials - NEVER commit
+instances/*/metadata.json
+instances/credentials.json
+*.key
+*.pem
+
+# But keep directory structure
+!instances/.gitkeep
+!instances/*/.gitkeep
+
+# Archives
+instances/.archive/
+
+# OS files
+.DS_Store
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Temp files
+*.tmp
