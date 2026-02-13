@@ -60,9 +60,11 @@ if ! id openclaw &>/dev/null; then
   echo "openclaw ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/openclaw
 fi
 
-# Copy Claude Code prompt to openclaw user's home
-cp /root/03-claude-code-setup-prompt.md /home/openclaw/
-chown openclaw:openclaw /home/openclaw/03-claude-code-setup-prompt.md
+# Copy Claude Code prompt to openclaw user's home (if exists)
+if [ -f /root/setup-openclaw.md ]; then
+  cp /root/setup-openclaw.md /home/openclaw/
+  chown openclaw:openclaw /home/openclaw/setup-openclaw.md
+fi
 
 # ── Write a convenience launcher script ──────────────────────────────────
 cat > /home/openclaw/run-claude-setup.sh << 'LAUNCHER'
@@ -87,7 +89,7 @@ echo ""
 
 # Run Claude Code with the setup prompt
 # --print mode runs non-interactively and prints the output
-claude --print "$(cat /home/openclaw/03-claude-code-setup-prompt.md)"
+claude --print "$(cat /home/openclaw/setup-openclaw.md)"
 LAUNCHER
 
 chmod +x /home/openclaw/run-claude-setup.sh
@@ -109,5 +111,5 @@ echo "║    ANTHROPIC_API_KEY=sk-ant-... ./run-claude-setup.sh         ║"
 echo "║                                                               ║"
 echo "║  Or interactively:                                            ║"
 echo "║    ANTHROPIC_API_KEY=sk-ant-... claude                        ║"
-echo "║    (then paste the prompt from 03-claude-code-setup-prompt.md)║"
+echo "║    (then paste the prompt from setup-openclaw.md)             ║"
 echo "╚════════════════════════════════════════════════════════════════╝"

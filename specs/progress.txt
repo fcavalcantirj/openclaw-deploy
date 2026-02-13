@@ -36,5 +36,26 @@
 - Clean up tested: deleted VM, SSH key, and local files successfully
 - Status: **COMPLETE**
 
+### Task #4: Provision - Create bootstrap.sh ✓
+- Created and tested bootstrap.sh script on test VM (test-bootstrap-001)
+- Successfully installed all required packages:
+  - System packages: curl, git, jq, ufw, tmux, build-essential
+  - Node.js v22.22.0 via nodesource
+  - npm v10.9.4
+  - Claude Code CLI v2.1.41
+- UFW firewall configured correctly:
+  - Default deny incoming, allow outgoing
+  - SSH port 22 allowed
+  - Port 18789 NOT exposed (security requirement met)
+- Created openclaw user with sudo access
+- Fixed bootstrap.sh to use correct prompt filename (setup-openclaw.md)
+- All verifications passed:
+  - `node -v` returns v22.22.0 ✓
+  - `which claude` returns /usr/bin/claude ✓
+  - Essential packages installed ✓
+  - openclaw user created with sudo ✓
+  - UFW active with correct rules ✓
+- Status: **COMPLETE**
+
 ## Next
-- Task #4: Create bootstrap.sh for installing Node 22 and Claude Code on VM
+- Task #5: Create Claude Code prompt that installs and configures OpenClaw Gateway
