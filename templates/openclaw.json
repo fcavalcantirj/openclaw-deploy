@@ -4,34 +4,29 @@
     "port": 18789,
     "auth": {
       "mode": "token"
-    },
-    "http": {
-      "endpoints": {
-        "chatCompletions": {
-          "enabled": true
-        }
-      }
     }
   },
   "channels": {
     "telegram": {
       "enabled": true,
-      "botToken": "{{TELEGRAM_BOT_TOKEN}}",
       "dmPolicy": "pairing",
-      "groups": {
-        "*": {
-          "requireMention": true
-        }
-      }
+      "token": "TELEGRAM_BOT_TOKEN_PLACEHOLDER"
+    }
+  },
+  "http": {
+    "chatCompletions": {
+      "enabled": true,
+      "allowedOrigins": ["*"]
     }
   },
   "logging": {
-    "redactSensitive": true
+    "redactSensitive": true,
+    "level": "info"
   },
-  "agents": {
-    "defaults": {
-      "model": "anthropic/claude-sonnet-4-20250514",
-      "thinkingDefault": "medium"
+  "skills": {
+    "openai-whisper-api": {
+      "enabled": false,
+      "apiKey": "OPENAI_API_KEY_PLACEHOLDER"
     }
   }
 }

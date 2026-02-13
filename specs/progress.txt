@@ -135,6 +135,30 @@
 - Syntax verified with bash -n for both scripts
 - All requirements met per specs/prd-v1.json task 12
 
+## 2026-02-13 22:30
+- ✅ Task 13: templates/openclaw.json created and verified
+- Base OpenClaw Gateway configuration template with secure defaults
+- Gateway configuration:
+  - bind: loopback (127.0.0.1 only, not exposed to public)
+  - port: 18789 (standard OpenClaw port)
+  - auth.mode: token (authentication required)
+- Telegram channel:
+  - enabled: true (bot integration ready)
+  - dmPolicy: pairing (requires pairing code approval)
+  - token: placeholder (replaced during deployment)
+- HTTP endpoints:
+  - chatCompletions.enabled: true (OpenAI-compatible endpoint)
+  - allowedOrigins: ["*"] (configurable CORS)
+- Logging:
+  - redactSensitive: true (auto-redact API keys/tokens)
+  - level: info (standard logging verbosity)
+- Skills:
+  - openai-whisper-api configured (disabled by default, enabled by setup-skills.sh)
+- Created templates/README.md with detailed documentation
+- JSON syntax verified with jq
+- Follows security best practices: loopback bind, token auth, sensitive data redaction
+- All requirements met per specs/prd-v1.json task 13
+
 ## Tasks
 1. ✅ provision.sh - create VM
 2. ✅ bootstrap.sh - install Node + Claude Code
@@ -147,6 +171,6 @@
 9. ✅ deploy.sh - master orchestrator
 10. ✅ destroy.sh - teardown
 11. ✅ status.sh + list.sh - management
-12. templates/openclaw.json - base config
+12. ✅ templates/openclaw.json - base config
 13. README.md - documentation
 14. CLAUDE.md - guidelines
