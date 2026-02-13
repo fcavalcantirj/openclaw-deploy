@@ -40,7 +40,7 @@
 
 ### Skill Packaging (2)
 - SKILL.md ✓ — package as skill
-- README.md — comprehensive docs
+- README.md ✓ — comprehensive docs
 
 ## Vision
 This becomes a SKILL for managing child OpenClaws:
