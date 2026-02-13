@@ -14,7 +14,7 @@
   {"category": "telegram","description": "Create setup-telegram-bot.sh to configure bot token and restart gateway","passes": true},
   {"category": "telegram","description": "Create approve-user.sh for pairing approval (list pending, approve by code)","passes": true},
   {"category": "telegram","description": "Create user-onboard.sh to orchestrate: set bot, notify user, wait for pairing, approve","passes": true},
-  {"category": "messaging","description": "Create send-message.sh to send messages to any child instance","passes": false},
+  {"category": "messaging","description": "Create send-message.sh to send messages to any child instance","passes": true},
   {"category": "messaging","description": "Create receive-check.sh to check for new messages/events on an instance","passes": false},
   {"category": "control","description": "Create restart.sh to restart OpenClaw gateway on an instance","passes": false},
   {"category": "control","description": "Create update.sh to update OpenClaw version on an instance","passes": false},
