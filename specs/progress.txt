@@ -1,262 +1,49 @@
 # OpenClaw Deploy Progress
 
-## 2026-02-13 04:44
-- RESET: Corrected approach
-- Ralph writes scripts, doesn't deploy
-- Scripts use Claude Code ON VM for config
-- Cleaned up test-setup-001 VM
-- 14 tasks: all about writing scripts
+## 2026-02-13 05:18 — Complete Task Review
 
-## 2026-02-13 14:30
-- ✅ Task 2: bootstrap.sh verified
-- Script installs: Node 22, Claude Code CLI, essentials (curl, git, jq, ufw, tmux)
-- Creates openclaw user with sudo
-- Configures UFW: SSH only
-- Creates helper script for running Claude Code
-- Syntax verified with bash -n
-- All requirements met per specs/prd-v1.json task 2
+### Done (12)
+- provision.sh ✓
+- bootstrap.sh ✓
+- setup-openclaw.sh ✓
+- prompts/setup-openclaw.md ✓
+- setup-tailscale.sh ✓
+- setup-skills.sh ✓
+- setup-monitoring.sh ✓
+- verify.sh ✓
+- deploy.sh ✓
+- destroy.sh ✓
+- status.sh, list.sh ✓
+- templates/openclaw.json ✓
 
-## 2026-02-13 15:00
-- ✅ Task 3: setup-openclaw.sh created
-- Script accepts instance name and Anthropic API key
-- SSHs to VM, copies setup prompt, runs Claude Code
-- Handles errors gracefully, updates metadata status
-- ✅ Task 4: prompts/setup-openclaw.md verified
-- Comprehensive 5-phase setup: OpenClaw install, config, Tailscale, monitoring, quickref
-- Configures loopback bind, token auth, telegram channel, chatCompletions endpoint
-- All requirements met and exceeded
+### Telegram & User Onboarding (3)
+- setup-telegram-bot.sh — configure bot token
+- approve-user.sh — pairing approval
+- user-onboard.sh — full user flow
 
-## 2026-02-13 16:00
-- ✅ Task 6: setup-tailscale.sh created and verified
-- Script accepts instance name and Anthropic API key
-- Creates prompts/setup-tailscale.md for Claude Code on VM
-- Installs Tailscale via official script
-- Captures and displays auth URL prominently for user
-- Polls status until authentication complete
-- Retrieves and displays Tailscale IP (100.x.x.x)
-- Updates instance metadata with Tailscale IP
-- Idempotent: skips if Tailscale already connected
-- Graceful error handling with troubleshooting steps
-- All requirements met per specs/prd-v1.json task 6
+### Messaging (2)
+- send-message.sh — send to child instances
+- receive-check.sh — check for messages
 
-## 2026-02-13 17:00
-- ✅ Task 7: setup-skills.sh created and verified
-- Script accepts instance name and OpenAI API key
-- Configures openai-whisper-api skill with API key in OpenClaw config
-- Installs clawhub CLI globally via npm
-- Verifies transcribe.sh script availability
-- Verifies clawhub --version works
-- Restarts OpenClaw gateway to apply configuration changes
-- Updates instance metadata status to "skills-configured"
-- Includes error handling and troubleshooting guidance
-- Syntax verified with bash -n
-- All requirements met per specs/prd-v1.json task 7
+### Control (4)
+- restart.sh — restart gateway
+- update.sh — update OpenClaw
+- logs.sh — fetch logs
+- config-view.sh — view/edit config
 
-## 2026-02-13 18:00
-- ✅ Task 8: setup-monitoring.sh created and verified
-- Script creates ~/scripts/healthcheck.sh on VM
-- Healthcheck monitors: gateway status, port 18789, disk space, memory
-- Creates systemd user timer with 5-minute interval
-- Creates systemd service unit for oneshot execution
-- Configures logrotate for healthcheck logs (7-day rotation)
-- Runs initial healthcheck to verify functionality
-- Verifies timer is active and shows next run time
-- Updates instance metadata status to "monitoring-configured"
-- Idempotent: skips if timer already active
-- Includes comprehensive logging to ~/logs/healthcheck.log
-- Graceful error handling with clear status messages
-- Syntax verified with bash -n
-- All requirements met per specs/prd-v1.json task 8
+### Monitoring (2)
+- monitor-all.sh — check ALL instances
+- heartbeat integration — monitor from parent
 
-## 2026-02-13 19:00
-- ✅ Task 9: verify.sh created and verified
-- Script runs full 10-point verification checklist via SSH
-- Checks: SSH connectivity, OpenClaw version, gateway status, systemd service,
-  Tailscale status, Telegram channel, healthcheck timer, UFW firewall,
-  disk space (>50% free threshold), memory usage (<90% threshold)
-- Generates QUICKREF.md on VM with access info, commands, troubleshooting
-- QUICKREF includes: server IPs, SSH commands, service status commands,
-  Telegram bot info, monitoring commands, system resources, useful commands
-- Updates instance metadata status to "operational" (all pass) or "degraded" (any fail)
-- Color-coded output: green=pass, red=fail, yellow=warn, blue=info
-- Graceful error handling with detailed failure reporting
-- Syntax verified with bash -n
-- All requirements met per specs/prd-v1.json task 9
+### Recovery (1)
+- resuscitate.sh — recover crashed instances
 
-## 2026-02-13 20:00
-- ✅ Task 10: deploy.sh master orchestrator created and verified
-- Script orchestrates full deployment pipeline: provision → bootstrap → openclaw → tailscale → skills → monitoring → verify
-- Accepts --name, --region, --anthropic-key, --openai-key flags
-- Auto-generates instance name if not provided
-- Supports --skip-tailscale, --skip-skills, --skip-monitoring flags for flexible deployment
-- Validates Anthropic API key required, OpenAI key optional
-- Loads and displays instance metadata after each phase
-- Shows comprehensive final summary with all access details
-- Includes SSH commands, Tailscale IP, service status commands
-- Next steps guidance: Telegram setup, status check, list instances
-- Color-coded output for better readability
-- Error handling: exits on critical failures, warns on optional features
-- Syntax verified with bash -n
-- All requirements met per specs/prd-v1.json task 10
+### Skill Packaging (2)
+- SKILL.md — package as skill
+- README.md — comprehensive docs
 
-## 2026-02-13 21:00
-- ✅ Task 11: destroy.sh created and verified
-- Script accepts instance name as first argument
-- Requires --confirm flag or interactive "destroy" confirmation
-- Attempts Tailscale logout on VM before destruction (graceful if offline)
-- Deletes Hetzner server with confirmation check
-- Removes SSH key from Hetzner (uses correct naming: openclaw-{name})
-- Deletes local SSH keys (reads path from metadata)
-- Archives instance metadata to instances/.archive/ with timestamp
-- Adds destroyed_at timestamp to archived metadata
-- Lists available instances if specified instance not found
-- Idempotent: handles already-deleted resources gracefully
-- Clear step-by-step output with status indicators
-- Syntax verified with bash -n
-- All requirements met per specs/prd-v1.json task 11
-
-## 2026-02-13 22:00
-- ✅ Task 12: status.sh and list.sh created and verified
-- status.sh: Shows detailed instance status with metadata + live checks via SSH
-  - Displays basic info: name, region, status, IPs, OpenClaw version, Telegram bot
-  - Performs live checks: SSH connectivity, OpenClaw version, gateway status, systemd service, Tailscale, healthcheck timer, UFW, disk space, memory usage
-  - Shows recent gateway logs (last 5 entries)
-  - Provides quick action commands for SSH, logs, restart, QUICKREF
-  - Handles offline VMs gracefully with troubleshooting guidance
-  - Color-coded output: green=pass, red=fail, yellow=warning, blue=info
-- list.sh: Lists all instances with status summary
-  - Table format with name, status, server IP, Tailscale IP, reachability
-  - Checks each instance for SSH connectivity (online/offline/unknown)
-  - Color-coded status indicators for operational, degraded, offline
-  - Shows summary counts: total, operational, degraded, offline instances
-  - Displays available commands for managing instances
-  - Graceful handling of missing or unreachable VMs (3s timeout)
-- Both scripts handle edge cases: no instances, missing SSH keys, unreachable VMs
-- Syntax verified with bash -n for both scripts
-- All requirements met per specs/prd-v1.json task 12
-
-## 2026-02-13 22:30
-- ✅ Task 13: templates/openclaw.json created and verified
-- Base OpenClaw Gateway configuration template with secure defaults
-- Gateway configuration:
-  - bind: loopback (127.0.0.1 only, not exposed to public)
-  - port: 18789 (standard OpenClaw port)
-  - auth.mode: token (authentication required)
-- Telegram channel:
-  - enabled: true (bot integration ready)
-  - dmPolicy: pairing (requires pairing code approval)
-  - token: placeholder (replaced during deployment)
-- HTTP endpoints:
-  - chatCompletions.enabled: true (OpenAI-compatible endpoint)
-  - allowedOrigins: ["*"] (configurable CORS)
-- Logging:
-  - redactSensitive: true (auto-redact API keys/tokens)
-  - level: info (standard logging verbosity)
-- Skills:
-  - openai-whisper-api configured (disabled by default, enabled by setup-skills.sh)
-- Created templates/README.md with detailed documentation
-- JSON syntax verified with jq
-- Follows security best practices: loopback bind, token auth, sensitive data redaction
-- All requirements met per specs/prd-v1.json task 13
-
-## 2026-02-13 23:00
-- ✅ Task 14: README.md created with comprehensive documentation
-- Prerequisites section:
-  - Required: Hetzner Cloud account, Anthropic API key, system tools (hcloud, jq, ssh)
-  - Optional: OpenAI API key, Telegram bot token
-  - Setup instructions for hcloud CLI context
-- Quick start guide:
-  - Clone and configure steps
-  - Deploy command with all options
-  - Telegram bot setup instructions
-  - Status checking commands
-- Command reference:
-  - Full deployment flags: --name, --region, --anthropic-key, --openai-key, --skip-* options
-  - Instance management: list.sh, status.sh, destroy.sh
-  - Manual step-by-step deployment option
-- Architecture diagram and explanation:
-  - Local orchestrator → Hetzner VM flow
-  - Component descriptions
-  - Claude Code ON VM approach
-- Security model:
-  - Network security: loopback bind, UFW, Tailscale, no public ports
-  - Authentication: token auth, pairing policy, SSH keys
-  - Credential management best practices
-- Cost breakdown:
-  - Hetzner: ~$5/month per cx22 instance
-  - API usage estimates (Anthropic, OpenAI)
-- Troubleshooting section:
-  - Deployment issues: hcloud CLI, SSH, context setup
-  - Runtime issues: gateway, Tailscale, memory
-  - Common errors with solutions
-- File structure reference
-- Advanced usage: custom config, multiple regions, bulk operations
-- Development guidelines and contribution instructions
-- All requirements met per specs/prd-v1.json task 14
-
-## 2026-02-13 23:30
-- ✅ Task 15: CLAUDE.md updated with testing workflow
-- Added comprehensive Testing section:
-  - Verification approach: code review + syntax checking (not VM deployment)
-  - Always verify: bash -n for scripts, jq for JSON, code review checklist
-  - Explains why no VM testing (cost, time, idempotent design)
-  - Idempotent pattern examples and best practices
-- Updated Workflow section:
-  - Step 3: "Verify script quality" instead of generic "code review"
-  - Step 5: Explicit "Set passes: true in specs/prd-v1.json"
-  - Clear reference to Testing section
-- Golden rules already covered:
-  - Rule 1: Write scripts, don't deploy
-  - Rule 3: Scripts must be idempotent
-  - Rules 4-5: Security and error handling
-- All requirements met per specs/prd-v1.json task 15
-
-## Tasks
-1. ✅ provision.sh - create VM
-2. ✅ bootstrap.sh - install Node + Claude Code
-3. ✅ setup-openclaw.sh - run Claude Code for OpenClaw
-4. ✅ prompts/setup-openclaw.md - the prompt
-5. ✅ setup-tailscale.sh - run Claude Code for Tailscale
-6. ✅ setup-skills.sh - whisper + clawhub
-7. ✅ setup-monitoring.sh - healthcheck timer
-8. ✅ verify.sh - full checklist
-9. ✅ deploy.sh - master orchestrator
-10. ✅ destroy.sh - teardown
-11. ✅ status.sh + list.sh - management
-12. ✅ templates/openclaw.json - base config
-13. ✅ README.md - documentation
-14. ✅ CLAUDE.md - guidelines
-
-═══════════════════════════════════════════════════════════
-ALL TASKS COMPLETE - OpenClaw Deploy v1.0 Ready
-═══════════════════════════════════════════════════════════
-
-## 2026-02-13 (Onboarding Tasks)
-- ✅ Task 16: setup-telegram-bot.sh created and verified
-- Script accepts instance name and bot token as arguments
-- Validates bot token format: /^[0-9]+:[A-Za-z0-9_-]+$/
-- Tests bot token via Telegram API (api.telegram.org/bot{token}/getMe)
-- Updates OpenClaw config with bot token using jq (with backup)
-- Restarts OpenClaw gateway to apply changes
-- Updates instance metadata with bot username
-- Outputs bot username for sharing with users
-- Provides commands to check and approve pairing requests
-- Created helper script: list-pairing-requests.sh
-- list-pairing-requests.sh lists pending Telegram pairing requests
-- Both scripts handle SSH connectivity and error cases gracefully
-- Clear step-by-step output with color-coded status
-- Syntax verified with bash -n for both scripts
-- All requirements met per specs/prd-v1.json task 16
-
-- ✅ Task 17: approve-user.sh created and verified
-- Script accepts instance name and pairing code as arguments
-- Validates pairing code format (6 digits)
-- SSH to VM and runs: openclaw pairing approve telegram CODE
-- Supports --list flag to show pending pairing requests
-- Outputs approval confirmation and next steps
-- Provides guidance on sending welcome messages
-- Clear error handling for invalid codes, connection issues
-- Color-coded output with status indicators
-- Usage examples and help text included
-- Syntax verified with bash -n
-- All requirements met per specs/prd-v1.json task 17
+## Vision
+This becomes a SKILL for managing child OpenClaws:
+- Each child has its own Telegram bot
+- End users message those bots
+- Parent Claw can: spin up, control, monitor, kill, restart, resuscitate
