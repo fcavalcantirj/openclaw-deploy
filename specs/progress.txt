@@ -16,5 +16,13 @@
 - Created instances/hcloud-verified.json
 - Status: **COMPLETE**
 
+### Task #2: Infrastructure - Anthropic API key storage ✓
+- Read key from ~/.openclaw/agents/main/agent/auth-profiles.json
+- Extracted anthropic:token key value
+- Verified in instances/credentials.json (already stored)
+- Key format verified: starts with sk-ant-
+- Security verified: credentials.json is in .gitignore
+- Status: **COMPLETE**
+
 ## Next
-- Task #2: Store Anthropic API key securely
+- Task #3: Create provision.sh script for VM provisioning
