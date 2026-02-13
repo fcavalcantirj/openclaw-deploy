@@ -23,7 +23,7 @@
 
 ### Messaging (2)
 - send-message.sh ✓ — send to child instances
-- receive-check.sh — check for messages
+- receive-check.sh ✓ — check for messages
 
 ### Control (4)
 - restart.sh — restart gateway
