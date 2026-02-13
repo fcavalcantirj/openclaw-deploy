@@ -159,6 +159,41 @@
 - Follows security best practices: loopback bind, token auth, sensitive data redaction
 - All requirements met per specs/prd-v1.json task 13
 
+## 2026-02-13 23:00
+- ✅ Task 14: README.md created with comprehensive documentation
+- Prerequisites section:
+  - Required: Hetzner Cloud account, Anthropic API key, system tools (hcloud, jq, ssh)
+  - Optional: OpenAI API key, Telegram bot token
+  - Setup instructions for hcloud CLI context
+- Quick start guide:
+  - Clone and configure steps
+  - Deploy command with all options
+  - Telegram bot setup instructions
+  - Status checking commands
+- Command reference:
+  - Full deployment flags: --name, --region, --anthropic-key, --openai-key, --skip-* options
+  - Instance management: list.sh, status.sh, destroy.sh
+  - Manual step-by-step deployment option
+- Architecture diagram and explanation:
+  - Local orchestrator → Hetzner VM flow
+  - Component descriptions
+  - Claude Code ON VM approach
+- Security model:
+  - Network security: loopback bind, UFW, Tailscale, no public ports
+  - Authentication: token auth, pairing policy, SSH keys
+  - Credential management best practices
+- Cost breakdown:
+  - Hetzner: ~$5/month per cx22 instance
+  - API usage estimates (Anthropic, OpenAI)
+- Troubleshooting section:
+  - Deployment issues: hcloud CLI, SSH, context setup
+  - Runtime issues: gateway, Tailscale, memory
+  - Common errors with solutions
+- File structure reference
+- Advanced usage: custom config, multiple regions, bulk operations
+- Development guidelines and contribution instructions
+- All requirements met per specs/prd-v1.json task 14
+
 ## Tasks
 1. ✅ provision.sh - create VM
 2. ✅ bootstrap.sh - install Node + Claude Code
@@ -172,5 +207,5 @@
 10. ✅ destroy.sh - teardown
 11. ✅ status.sh + list.sh - management
 12. ✅ templates/openclaw.json - base config
-13. README.md - documentation
+13. ✅ README.md - documentation
 14. CLAUDE.md - guidelines
