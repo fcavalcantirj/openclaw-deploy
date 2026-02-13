@@ -183,6 +183,13 @@ AMCPEOF
       "dmPolicy": "pairing"
     }
   },
+  "plugins": {
+    "entries": {
+      "telegram": {
+        "enabled": true
+      }
+    }
+  },
   "agents": {
     "defaults": {
       "workspace": "/home/openclaw/.openclaw/workspace",

@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+# =============================================================================
+# claw — Master CLI for managing OpenClaw child instances
+# =============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INSTANCES_DIR="$SCRIPT_DIR/instances"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+usage() {
+  cat <<EOF
+${BOLD}claw — OpenClaw Child Instance Manager${NC}
+
+${BOLD}Usage:${NC}
+  claw <command> [args]
+
+${BOLD}Commands:${NC}
+  ${GREEN}deploy${NC} --name NAME --bot-token TOKEN   Deploy new child instance
+  ${GREEN}list${NC}                                   List all child instances
+  ${GREEN}status${NC} NAME                            Show child status
+  ${GREEN}approve${NC} NAME CODE                      Approve Telegram pairing
+  ${GREEN}message${NC} NAME "text"                    Send message to child
+  ${GREEN}logs${NC} NAME [-f]                         View child logs (-f to follow)
+  ${GREEN}restart${NC} NAME                           Restart child gateway
+  ${GREEN}destroy${NC} NAME                           Destroy child instance
+  ${GREEN}ssh${NC} NAME                               SSH into child (for debugging)
+
+${BOLD}Examples:${NC}
+  claw deploy --name bruce --bot-token "123:ABC..."
+  claw list
+  claw approve bruce 3R7YX6KS
+  claw message bruce "Hello from parent!"
+  claw logs bruce -f
+  claw destroy bruce
+
+EOF
+  exit 1
+}
+
+# Get instance metadata
+get_meta() {
+  local name="$1"
+  local field="$2"
+  local meta_file="$INSTANCES_DIR/$name/metadata.json"
+  [[ -f "$meta_file" ]] && jq -r ".$field // empty" "$meta_file"
+}
+
+# Get SSH command for instance
+ssh_cmd() {
+  local name="$1"
+  local key=$(get_meta "$name" "ssh_key_path")
+  local ip=$(get_meta "$name" "ip")
+  echo "ssh -i $key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
+}
+
+# =============================================================================
+# Commands
+# =============================================================================
+
+cmd_list() {
+  echo -e "${BOLD}OpenClaw Child Instances${NC}\n"
+  
+  if [[ ! -d "$INSTANCES_DIR" ]] || [[ -z "$(ls -A "$INSTANCES_DIR" 2>/dev/null | grep -v credentials | grep -v .archive)" ]]; then
+    echo "No instances found."
+    return
+  fi
+  
+  printf "%-20s %-16s %-25s %-10s\n" "NAME" "IP" "BOT" "STATUS"
+  printf "%-20s %-16s %-25s %-10s\n" "----" "--" "---" "------"
+  
+  for dir in "$INSTANCES_DIR"/*/; do
+    [[ -d "$dir" ]] || continue
+    [[ "$(basename "$dir")" == ".archive" ]] && continue
+    [[ "$(basename "$dir")" == "credentials.json" ]] && continue
+    
+    local name=$(basename "$dir")
+    local meta="$dir/metadata.json"
+    
+    if [[ -f "$meta" ]]; then
+      local ip=$(jq -r '.ip // "-"' "$meta")
+      local bot=$(jq -r '.bot_username // "-"' "$meta")
+      local status=$(jq -r '.status // "unknown"' "$meta")
+      
+      # Quick health check
+      if ssh -i "$(jq -r '.ssh_key_path' "$meta")" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3 -o LogLevel=ERROR "root@$ip" "systemctl is-active openclaw-gateway" 2>/dev/null | grep -q "active"; then
+        status="${GREEN}running${NC}"
+      else
+        status="${RED}down${NC}"
+      fi
+      
+      printf "%-20s %-16s %-25s %b\n" "$name" "$ip" "@$bot" "$status"
+    fi
+  done
+}
+
+cmd_status() {
+  local name="$1"
+  local ip=$(get_meta "$name" "ip")
+  local key=$(get_meta "$name" "ssh_key_path")
+  
+  [[ -z "$ip" ]] && { echo "Instance '$name' not found"; exit 1; }
+  
+  echo -e "${BOLD}Status: $name${NC} ($ip)\n"
+  
+  ssh -i "$key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "root@$ip" "
+    echo '=== Gateway ==='
+    systemctl is-active openclaw-gateway
+    
+    echo ''
+    echo '=== AMCP ==='
+    cat /home/openclaw/.amcp/identity.json 2>/dev/null | jq '{aid: .aid[:20], deaths: .deaths, last_checkpoint}' || echo 'No AMCP'
+    
+    echo ''
+    echo '=== Uptime ==='
+    uptime
+  " 2>/dev/null
+}
+
+cmd_approve() {
+  local name="$1"
+  local code="$2"
+  local ip=$(get_meta "$name" "ip")
+  local key=$(get_meta "$name" "ssh_key_path")
+  local token=$(get_meta "$name" "gateway_token")
+  
+  [[ -z "$ip" ]] && { echo "Instance '$name' not found"; exit 1; }
+  [[ -z "$code" ]] && { echo "Usage: claw approve NAME CODE"; exit 1; }
+  
+  echo -e "${BLUE}Approving pairing code $code on $name...${NC}"
+  
+  ssh -i "$key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "root@$ip" "
+    su - openclaw -c 'OPENCLAW_GATEWAY_TOKEN=\"$token\" openclaw pairing approve telegram $code 2>&1'
+  " 2>/dev/null
+  
+  echo -e "${GREEN}✓ Approved${NC}"
+}
+
+cmd_message() {
+  local name="$1"
+  local msg="$2"
+  local ip=$(get_meta "$name" "ip")
+  local key=$(get_meta "$name" "ssh_key_path")
+  local token=$(get_meta "$name" "gateway_token")
+  
+  [[ -z "$ip" ]] && { echo "Instance '$name' not found"; exit 1; }
+  [[ -z "$msg" ]] && { echo "Usage: claw message NAME \"text\""; exit 1; }
+  
+  ssh -i "$key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "root@$ip" "
+    su - openclaw -c 'OPENCLAW_GATEWAY_TOKEN=\"$token\" openclaw agent --session-id parent --message \"$msg\" 2>&1'
+  " 2>/dev/null
+}
+
+cmd_logs() {
+  local name="$1"
+  local follow="${2:-}"
+  local ip=$(get_meta "$name" "ip")
+  local key=$(get_meta "$name" "ssh_key_path")
+  
+  [[ -z "$ip" ]] && { echo "Instance '$name' not found"; exit 1; }
+  
+  if [[ "$follow" == "-f" ]]; then
+    ssh -i "$key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "root@$ip" \
+      "journalctl -u openclaw-gateway -f" 2>/dev/null
+  else
+    ssh -i "$key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "root@$ip" \
+      "journalctl -u openclaw-gateway --no-pager -n 50" 2>/dev/null
+  fi
+}
+
+cmd_restart() {
+  local name="$1"
+  local ip=$(get_meta "$name" "ip")
+  local key=$(get_meta "$name" "ssh_key_path")
+  
+  [[ -z "$ip" ]] && { echo "Instance '$name' not found"; exit 1; }
+  
+  echo -e "${BLUE}Restarting $name...${NC}"
+  ssh -i "$key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "root@$ip" \
+    "systemctl restart openclaw-gateway && sleep 2 && systemctl is-active openclaw-gateway" 2>/dev/null
+  echo -e "${GREEN}✓ Restarted${NC}"
+}
+
+cmd_destroy() {
+  local name="$1"
+  [[ -z "$name" ]] && { echo "Usage: claw destroy NAME"; exit 1; }
+  
+  echo -e "${YELLOW}Destroying $name...${NC}"
+  "$SCRIPT_DIR/scripts/destroy.sh" "$name" --confirm
+}
+
+cmd_ssh() {
+  local name="$1"
+  local ip=$(get_meta "$name" "ip")
+  local key=$(get_meta "$name" "ssh_key_path")
+  
+  [[ -z "$ip" ]] && { echo "Instance '$name' not found"; exit 1; }
+  
+  echo -e "${CYAN}Connecting to $name ($ip)...${NC}"
+  ssh -i "$key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "openclaw@$ip"
+}
+
+cmd_deploy() {
+  "$SCRIPT_DIR/deploy.sh" "$@"
+}
+
+# =============================================================================
+# Main
+# =============================================================================
+
+[[ $# -lt 1 ]] && usage
+
+cmd="$1"
+shift
+
+case "$cmd" in
+  deploy)  cmd_deploy "$@" ;;
+  list)    cmd_list ;;
+  status)  cmd_status "$@" ;;
+  approve) cmd_approve "$@" ;;
+  message) cmd_message "$@" ;;
+  logs)    cmd_logs "$@" ;;
+  restart) cmd_restart "$@" ;;
+  destroy) cmd_destroy "$@" ;;
+  ssh)     cmd_ssh "$@" ;;
+  help)    usage ;;
+  *)       echo "Unknown command: $cmd"; usage ;;
+esac
