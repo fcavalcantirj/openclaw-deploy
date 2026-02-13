@@ -26,7 +26,7 @@
 - receive-check.sh ✓ — check for messages
 
 ### Control (4)
-- restart.sh — restart gateway
+- restart.sh ✓ — restart gateway
 - update.sh — update OpenClaw
 - logs.sh — fetch logs
 - config-view.sh — view/edit config
