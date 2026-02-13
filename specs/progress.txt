@@ -7,9 +7,18 @@
 - Cleaned up test-setup-001 VM
 - 14 tasks: all about writing scripts
 
+## 2026-02-13 14:30
+- ✅ Task 2: bootstrap.sh verified
+- Script installs: Node 22, Claude Code CLI, essentials (curl, git, jq, ufw, tmux)
+- Creates openclaw user with sudo
+- Configures UFW: SSH only
+- Creates helper script for running Claude Code
+- Syntax verified with bash -n
+- All requirements met per specs/prd-v1.json task 2
+
 ## Tasks
-1. provision.sh - create VM
-2. bootstrap.sh - install Node + Claude Code
+1. ✅ provision.sh - create VM
+2. ✅ bootstrap.sh - install Node + Claude Code
 3. setup-openclaw.sh - run Claude Code for OpenClaw
 4. prompts/setup-openclaw.md - the prompt
 5. setup-tailscale.sh - run Claude Code for Tailscale  
