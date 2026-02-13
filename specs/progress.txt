@@ -115,6 +115,26 @@
 - Syntax verified with bash -n
 - All requirements met per specs/prd-v1.json task 11
 
+## 2026-02-13 22:00
+- ✅ Task 12: status.sh and list.sh created and verified
+- status.sh: Shows detailed instance status with metadata + live checks via SSH
+  - Displays basic info: name, region, status, IPs, OpenClaw version, Telegram bot
+  - Performs live checks: SSH connectivity, OpenClaw version, gateway status, systemd service, Tailscale, healthcheck timer, UFW, disk space, memory usage
+  - Shows recent gateway logs (last 5 entries)
+  - Provides quick action commands for SSH, logs, restart, QUICKREF
+  - Handles offline VMs gracefully with troubleshooting guidance
+  - Color-coded output: green=pass, red=fail, yellow=warning, blue=info
+- list.sh: Lists all instances with status summary
+  - Table format with name, status, server IP, Tailscale IP, reachability
+  - Checks each instance for SSH connectivity (online/offline/unknown)
+  - Color-coded status indicators for operational, degraded, offline
+  - Shows summary counts: total, operational, degraded, offline instances
+  - Displays available commands for managing instances
+  - Graceful handling of missing or unreachable VMs (3s timeout)
+- Both scripts handle edge cases: no instances, missing SSH keys, unreachable VMs
+- Syntax verified with bash -n for both scripts
+- All requirements met per specs/prd-v1.json task 12
+
 ## Tasks
 1. ✅ provision.sh - create VM
 2. ✅ bootstrap.sh - install Node + Claude Code
@@ -126,7 +146,7 @@
 8. ✅ verify.sh - full checklist
 9. ✅ deploy.sh - master orchestrator
 10. ✅ destroy.sh - teardown
-11. status.sh + list.sh - management
+11. ✅ status.sh + list.sh - management
 12. templates/openclaw.json - base config
 13. README.md - documentation
 14. CLAUDE.md - guidelines
