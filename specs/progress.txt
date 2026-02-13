@@ -39,13 +39,26 @@
 - Graceful error handling with troubleshooting steps
 - All requirements met per specs/prd-v1.json task 6
 
+## 2026-02-13 17:00
+- ✅ Task 7: setup-skills.sh created and verified
+- Script accepts instance name and OpenAI API key
+- Configures openai-whisper-api skill with API key in OpenClaw config
+- Installs clawhub CLI globally via npm
+- Verifies transcribe.sh script availability
+- Verifies clawhub --version works
+- Restarts OpenClaw gateway to apply configuration changes
+- Updates instance metadata status to "skills-configured"
+- Includes error handling and troubleshooting guidance
+- Syntax verified with bash -n
+- All requirements met per specs/prd-v1.json task 7
+
 ## Tasks
 1. ✅ provision.sh - create VM
 2. ✅ bootstrap.sh - install Node + Claude Code
 3. ✅ setup-openclaw.sh - run Claude Code for OpenClaw
 4. ✅ prompts/setup-openclaw.md - the prompt
 5. ✅ setup-tailscale.sh - run Claude Code for Tailscale
-6. setup-skills.sh - whisper + clawhub
+6. ✅ setup-skills.sh - whisper + clawhub
 7. setup-monitoring.sh - healthcheck timer
 8. verify.sh - full checklist
 9. deploy.sh - master orchestrator
