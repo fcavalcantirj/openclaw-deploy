@@ -1,108 +1,143 @@
-# CLAUDE.md — Project Instructions for Claude Code
+# OpenClaw Deploy — Project Guidelines
 
-## What This Is
+## Overview
 
-OpenClaw Deploy Kit — Spin up fully configured OpenClaw Gateway instances on Hetzner Cloud, automated via Claude Code.
+Autonomous provisioning and configuration of OpenClaw Gateway instances on Hetzner Cloud.
 
-## Architecture
+## Golden Rules
 
-```
-Claudius (orchestrator)          Hetzner Cloud
-┌─────────────────────┐         ┌──────────────────────────────┐
-│ ~/clawd/openclaw-   │  hcloud │  Ubuntu 24.04 VM             │
-│    deploy/          │────────►│  ├── Node 22                 │
-│                     │         │  ├── Claude Code CLI         │
-│ • provisions VM     │         │  ├── OpenClaw Gateway        │
-│ • uploads scripts   │         │  │   └── 127.0.0.1:18789     │
-│ • triggers Claude   │         │  ├── Tailscale               │
-│   Code on VM        │         │  └── Health monitoring       │
-│ • monitors status   │         └──────────────────────────────┘
-└─────────────────────┘
+### 1. Test Before Marking Done
+
+**Verify each step actually works before marking passes=true.**
+
+```bash
+# Example: verify hcloud works
+hcloud server list  # Must succeed, not just "installed"
 ```
 
-## Key Decisions
+### 2. Real Implementation Only
 
-- **Cloud**: Hetzner (cheap, reliable) — design for provider extensibility
-- **Telegram**: One bot per instance (scales better than shared bot)
-- **Tailscale**: Single tailnet, use tags for organization
-- **Naming**: `openclaw-{purpose}-{region}` or custom
-- **Credentials**: Stored securely on filesystem + AgentMemory vault
+**NO placeholders. NO "will be added later". Everything must work.**
 
-## Directory Structure
+- If a script needs to exist, write the full script
+- If a config needs values, use real values (or documented placeholders)
+- If verification is needed, run the actual commands
+
+### 3. Security First
+
+- Never commit credentials
+- Gateway binds to loopback only
+- UFW denies all except SSH
+- Tailscale for remote access
+
+### 4. Document As You Go
+
+- Update `specs/progress.txt` with what you did
+- Keep QUICKREF.md current
+- Comments in scripts explain why, not what
+
+---
+
+## File Structure
 
 ```
 openclaw-deploy/
-├── CLAUDE.md              # This file
-├── README.md              # User-facing docs
-├── specs/                 # Task specifications (claude code spec format)
-│   ├── 01-provision.json
-│   ├── 02-bootstrap.json
-│   └── ...
+├── CLAUDE.md              # This file (project guidelines)
+├── SPEC.md                # Full technical specification
+├── README.md              # User-facing quick start
+├── specs/
+│   ├── prd-v1.json        # Requirements (passes: true/false)
+│   └── progress.txt       # Progress notes
 ├── scripts/
-│   ├── provision.sh       # Main provisioning script
-│   ├── bootstrap.sh       # Runs on VM (installs Node, Claude Code)
-│   └── healthcheck.sh     # Monitoring script
+│   ├── provision.sh       # Create Hetzner VM
+│   ├── bootstrap.sh       # Install Node + Claude Code on VM
+│   ├── deploy.sh          # Master orchestration
+│   ├── status.sh          # Check instance status
+│   ├── list.sh            # List all instances
+│   ├── destroy.sh         # Remove instance
+│   └── healthcheck.sh     # Monitoring (runs on VM)
 ├── prompts/
 │   └── setup-openclaw.md  # Claude Code prompt for VM setup
 ├── templates/
-│   └── openclaw.json      # Base config template
-└── instances/             # State for deployed instances
-    └── {instance-name}/
-        ├── metadata.json  # IP, region, created_at, status
-        └── config.json    # Instance-specific config
+│   └── openclaw.json      # Base OpenClaw config
+├── instances/             # Per-instance state (gitignored)
+│   ├── credentials.json   # API keys (gitignored)
+│   └── {name}/
+│       └── metadata.json
+├── ralph.sh               # Task runner
+└── progress.sh            # Progress tracker
 ```
 
-## Workflow (Human + AI)
+---
 
-1. Human: "Spin up a new OpenClaw for research"
-2. Claudius: Asks clarifying questions (name, region, bot token)
-3. Claudius: Provisions VM via hcloud
-4. Claudius: Runs bootstrap (Node + Claude Code)
-5. Claudius: Triggers Claude Code on VM with setup prompt
-6. Claudius: Waits for Tailscale auth (human clicks link)
-7. Claudius: Verifies everything works
-8. Claudius: Reports back with quickref
+## Workflow
 
-## Credentials Required
+### Working on a Requirement
 
-| Credential | Where Stored | Who Provides |
-|------------|--------------|--------------|
-| Hetzner API token | `~/.config/hcloud/cli.toml` | Human (one-time) |
-| Anthropic API key | AgentMemory vault | Human (one-time) |
-| Telegram bot token | Asked during spinup | Human (per instance) |
-| Tailscale auth | Human clicks link | Human (per instance) |
+1. **Read `specs/prd-v1.json`** — find next `"passes": false`
+2. **Read `SPEC.md`** — understand full context for that component
+3. **Implement** — write/update scripts, configs, prompts
+4. **Test** — run the actual commands, verify they work
+5. **Update `specs/progress.txt`** — note what you did
+6. **Update `specs/prd-v1.json`** — set `"passes": true`
+7. **Commit and push**
 
-## Commands
+### Commit Message Format
 
+```
+feat(provision): implement VM creation script
+
+- Add hcloud server create with SSH key
+- Add metadata.json generation
+- Tested: created test VM successfully
+```
+
+---
+
+## Commands Reference
+
+### hcloud (VM management)
 ```bash
-# Provision new instance
-./scripts/provision.sh --name openclaw-research --region nbg1
-
-# Check instance status
-./scripts/status.sh openclaw-research
-
-# List all instances
-./scripts/list.sh
-
-# Destroy instance
-./scripts/destroy.sh openclaw-research
+export PATH="$HOME/bin:$PATH"
+hcloud server list
+hcloud server create --name NAME --type cx22 --image ubuntu-24.04 --location nbg1 --ssh-key KEY
+hcloud server delete NAME
+hcloud server ip NAME
 ```
 
-## Specs
-
-Task specs live in `specs/` directory. Format:
-
-```json
-{
-  "category": "provision",
-  "description": "What this task accomplishes",
-  "steps": [
-    "Step 1: Do X",
-    "Step 2: Verify Y",
-    "Step 3: Handle error Z"
-  ],
-  "passes": false
-}
+### SSH to VM
+```bash
+ssh -i ~/.ssh/openclaw_NAME root@IP
+ssh -i ~/.ssh/openclaw_NAME openclaw@IP
 ```
 
-Run specs: `claude spec run specs/01-provision.json`
+### Claude Code on VM
+```bash
+ANTHROPIC_API_KEY=sk-ant-... claude --print "$(cat setup-prompt.md)"
+```
+
+### Progress Tracking
+```bash
+./progress.sh  # Shows X/14 (Y%)
+```
+
+---
+
+## Credentials
+
+| Credential | Location | Notes |
+|------------|----------|-------|
+| Hetzner | ~/.config/hcloud/cli.toml | Configured via hcloud CLI |
+| Anthropic | instances/credentials.json | For Claude Code on VMs |
+| OpenAI | ~/.openclaw/openclaw.json | For whisper skill |
+
+**All credentials are gitignored. Never commit them.**
+
+---
+
+## Important Notes
+
+1. **Read SPEC.md** — it has full details for each component
+2. **One task at a time** — complete and verify before moving on
+3. **Test proves completion** — if it works, mark it done
+4. **Ask if unclear** — better to clarify than assume wrong

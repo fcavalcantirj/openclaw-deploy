@@ -1,12 +1,16 @@
 #!/bin/bash
-# Progress tracker for ralph
-SPECS_FILE="specs/prd-v1.json"
-if [ -f "$SPECS_FILE" ]; then
-    total=$(jq 'length' "$SPECS_FILE")
-    passed=$(jq '[.[] | select(.passes==true)] | length' "$SPECS_FILE")
-    skipped=$(jq '[.[] | select(.passes=="SKIPPED")] | length' "$SPECS_FILE")
-    remaining=$((total - passed - skipped))
-    echo "✅ $passed/$total passed | ⏭️ $skipped skipped | 📋 $remaining remaining"
+prd_file="specs/prd-v1.json"
+if [ ! -f "$prd_file" ]; then
+  echo "0/0 (0%) - PRD not found"
+  exit 0
+fi
+total=$(grep -c '"passes"' "$prd_file" | tr -d '\n')
+passed=$(grep -c '"passes": true' "$prd_file" | tr -d '\n')
+total=${total:-0}
+passed=${passed:-0}
+if [ "$total" -eq 0 ]; then
+  echo "0/0 (0%)"
 else
-    echo "No specs file found"
+  percent=$((passed * 100 / total))
+  echo "${passed}/${total} (${percent}%)"
 fi

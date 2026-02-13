@@ -1,0 +1,12 @@
+# OpenClaw Deploy Progress
+
+## 2026-02-13
+- Initial project structure created
+- Specs consolidated to prd-v1.json (14 tasks)
+- Scripts copied from zip: provision.sh, bootstrap.sh
+- prompts/setup-openclaw.md ready
+- Credentials stored (gitignored)
+- hcloud CLI configured and verified
+
+## Next
+- Work through prd-v1.json tasks
