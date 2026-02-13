@@ -28,7 +28,7 @@
 ### Control (4)
 - restart.sh ✓ — restart gateway
 - update.sh ✓ — update OpenClaw
-- logs.sh — fetch logs
+- logs.sh ✓ — fetch logs
 - config-view.sh — view/edit config
 
 ### Monitoring (2)
