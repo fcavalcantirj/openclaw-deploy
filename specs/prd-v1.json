@@ -21,7 +21,7 @@
   {"category": "control","description": "Create logs.sh to fetch and display logs from an instance","passes": true},
   {"category": "control","description": "Create config-view.sh to view/update config on an instance","passes": true},
   {"category": "monitoring","description": "Create monitor-all.sh that checks ALL instances and alerts on issues","passes": true},
-  {"category": "monitoring","description": "Add cron/heartbeat integration to monitor children from parent Claw","passes": false},
+  {"category": "monitoring","description": "Add cron/heartbeat integration to monitor children from parent Claw","passes": true},
   {"category": "recovery","description": "Create resuscitate.sh to recover crashed/unresponsive instances","passes": true},
   {"category": "skill","description": "Create SKILL.md to package this as a proper OpenClaw skill","passes": true},
   {"category": "documentation","description": "Create comprehensive README with all workflows and examples","passes": true}

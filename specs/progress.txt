@@ -33,7 +33,7 @@
 
 ### Monitoring (2)
 - monitor-all.sh ✓ — check ALL instances
-- heartbeat integration — monitor from parent
+- heartbeat integration ✓ — monitor from parent
 
 ### Recovery (1)
 - resuscitate.sh ✓ — recover crashed instances
