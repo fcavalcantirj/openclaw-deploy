@@ -1,15 +1,25 @@
 #!/usr/bin/env bash
-# ============================================================================
-# deploy.sh — Master orchestration script for OpenClaw deployment
-# ============================================================================
+# =============================================================================
+# deploy.sh — Deploy OpenClaw child instance with full identity stack
+# =============================================================================
+# Creates VM with:
+#   - Telegram bot (token required)
+#   - AgentMail inbox (auto-created)
+#   - AgentMemory vault (auto-created)
+#   - AMCP identity + Pinata checkpoints
+#   - Self-healing watchdog
+#
+# Usage:
+#   ./deploy.sh --name child-03 --bot-token "123:ABC..."
+# =============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$SCRIPT_DIR/scripts"
-PROMPTS_DIR="$SCRIPT_DIR/prompts"
 INSTANCES_DIR="$SCRIPT_DIR/instances"
+CREDENTIALS_FILE="$INSTANCES_DIR/credentials.json"
 
-# Colors for output
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -22,271 +32,244 @@ log_info() { echo -e "${BLUE}[INFO]${NC} $*"; }
 log_success() { echo -e "${GREEN}[✓]${NC} $*"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
-log_section() { echo -e "\n${CYAN}${BOLD}▶ $*${NC}\n"; }
 
 usage() {
   cat <<EOF
-${BOLD}OpenClaw Deploy — Master Deployment Script${NC}
+${BOLD}OpenClaw Deploy — Child Instance with Full Identity Stack${NC}
 
-Usage: $0 [OPTIONS]
+Usage: $0 --name <name> --bot-token <token> [OPTIONS]
 
-Options:
-  --name NAME              Instance name (default: auto-generated)
-  --region REGION          Hetzner region: nbg1, fsn1, hel1, ash (default: nbg1)
-  --anthropic-key KEY      Anthropic API key (or use ANTHROPIC_API_KEY env var)
-  --openai-key KEY         OpenAI API key (or use OPENAI_API_KEY env var)
-  --skip-tailscale         Skip Tailscale setup
-  --skip-skills            Skip OpenAI skills setup
-  --skip-monitoring        Skip monitoring setup
-  --help                   Show this help message
+${BOLD}Required:${NC}
+  --name NAME             Instance name (e.g., child-03)
+  --bot-token TOKEN       Telegram bot token from @BotFather
 
-Environment Variables:
-  ANTHROPIC_API_KEY        Anthropic API key (required)
-  OPENAI_API_KEY           OpenAI API key (optional, required for skills)
+${BOLD}Optional:${NC}
+  --region REGION         Hetzner region: nbg1, fsn1, hel1 (default: nbg1)
+  --type TYPE             Server type (default: cx23)
+  --checkpoint-interval   AMCP checkpoint interval (default: 1h)
+  --help                  Show this help
 
-Example:
-  # Full deployment with all features
-  ./deploy.sh --name mybot --anthropic-key sk-ant-... --openai-key sk-...
+${BOLD}Auto-created per child:${NC}
+  - Telegram bot config (using provided token)
+  - AgentMail inbox: <name>@agentmail.to
+  - AgentMemory vault: <name>
+  - AMCP identity with Pinata checkpoints
+  - Self-healing watchdog
 
-  # Basic deployment without optional features
-  ANTHROPIC_API_KEY=sk-ant-... ./deploy.sh --name mybot --skip-skills
+${BOLD}Example:${NC}
+  # 1. Create bot via @BotFather, get token
+  # 2. Deploy:
+  ./deploy.sh --name child-03 --bot-token "7654321:AAF..."
 
-  # Auto-generated name
-  ./deploy.sh --anthropic-key sk-ant-... --openai-key sk-...
-
+Credentials: $CREDENTIALS_FILE
 EOF
-  exit 0
+  exit 1
 }
 
-# ── Parse arguments ─────────────────────────────────────────────────────────
-NAME=""
+# =============================================================================
+# Parse arguments
+# =============================================================================
+INSTANCE_NAME=""
+BOT_TOKEN=""
 REGION="nbg1"
-ANTHROPIC_KEY="${ANTHROPIC_API_KEY:-}"
-OPENAI_KEY="${OPENAI_API_KEY:-}"
-SKIP_TAILSCALE=false
-SKIP_SKILLS=false
-SKIP_MONITORING=false
+SERVER_TYPE="cx23"
+CHECKPOINT_INTERVAL="1h"
 
 while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --name)
-      NAME="$2"
-      shift 2
-      ;;
-    --region)
-      REGION="$2"
-      shift 2
-      ;;
-    --anthropic-key)
-      ANTHROPIC_KEY="$2"
-      shift 2
-      ;;
-    --openai-key)
-      OPENAI_KEY="$2"
-      shift 2
-      ;;
-    --skip-tailscale)
-      SKIP_TAILSCALE=true
-      shift
-      ;;
-    --skip-skills)
-      SKIP_SKILLS=true
-      shift
-      ;;
-    --skip-monitoring)
-      SKIP_MONITORING=true
-      shift
-      ;;
-    --help)
-      usage
-      ;;
-    *)
-      log_error "Unknown argument: $1"
-      usage
-      ;;
+  case $1 in
+    --name) INSTANCE_NAME="$2"; shift 2 ;;
+    --bot-token) BOT_TOKEN="$2"; shift 2 ;;
+    --region) REGION="$2"; shift 2 ;;
+    --type) SERVER_TYPE="$2"; shift 2 ;;
+    --checkpoint-interval) CHECKPOINT_INTERVAL="$2"; shift 2 ;;
+    --help) usage ;;
+    *) log_error "Unknown option: $1"; usage ;;
   esac
 done
 
-# ── Validate inputs ─────────────────────────────────────────────────────────
-if [[ -z "$ANTHROPIC_KEY" ]]; then
-  log_error "Anthropic API key is required (use --anthropic-key or ANTHROPIC_API_KEY env var)"
+# Validate required args
+[[ -z "$INSTANCE_NAME" ]] && { log_error "Missing --name"; usage; }
+[[ -z "$BOT_TOKEN" ]] && { log_error "Missing --bot-token (create via @BotFather)"; usage; }
+
+# Validate bot token format
+if ! [[ "$BOT_TOKEN" =~ ^[0-9]+:[A-Za-z0-9_-]+$ ]]; then
+  log_error "Invalid bot token format. Should be: 123456789:AAxx..."
   exit 1
 fi
 
-if [[ "$SKIP_SKILLS" == false && -z "$OPENAI_KEY" ]]; then
-  log_warn "OpenAI API key not provided. Skills setup will be skipped."
-  log_warn "To enable skills, provide --openai-key or set OPENAI_API_KEY env var"
-  SKIP_SKILLS=true
-fi
-
-# Auto-generate name if not provided
-if [[ -z "$NAME" ]]; then
-  TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-  NAME="openclaw-${TIMESTAMP}"
-  log_info "Auto-generated instance name: $NAME"
-fi
-
-# ── Display deployment plan ─────────────────────────────────────────────────
-echo ""
-echo "════════════════════════════════════════════════════════════════════"
-echo "  ${BOLD}OpenClaw Deployment${NC}"
-echo "════════════════════════════════════════════════════════════════════"
-echo ""
-echo "  Instance:    ${BOLD}$NAME${NC}"
-echo "  Region:      $REGION"
-echo "  Tailscale:   $([ "$SKIP_TAILSCALE" == true ] && echo "Skip" || echo "Install")"
-echo "  Skills:      $([ "$SKIP_SKILLS" == true ] && echo "Skip" || echo "Install")"
-echo "  Monitoring:  $([ "$SKIP_MONITORING" == true ] && echo "Skip" || echo "Install")"
-echo ""
-echo "════════════════════════════════════════════════════════════════════"
-echo ""
-
-# ── Step 1: Provision VM ────────────────────────────────────────────────────
-log_section "Step 1/7: Provisioning Hetzner VM"
-
-if ! "$SCRIPTS_DIR/provision.sh" --name "$NAME" --region "$REGION"; then
-  log_error "Provisioning failed"
+# =============================================================================
+# Load parent credentials
+# =============================================================================
+if [[ ! -f "$CREDENTIALS_FILE" ]]; then
+  log_error "Credentials file not found: $CREDENTIALS_FILE"
+  cat <<EOF
+Create it with:
+{
+  "anthropic_api_key": "sk-ant-...",
+  "parent_telegram_bot_token": "...",
+  "parent_telegram_chat_id": "152099202",
+  "agentmail_api_key": "am_...",
+  "agentmemory_api_key": "...",
+  "pinata_jwt": "...",
+  "notify_email": "you@example.com"
+}
+EOF
   exit 1
 fi
 
-log_success "VM provisioned successfully"
+ANTHROPIC_API_KEY=$(jq -r '.anthropic_api_key // empty' "$CREDENTIALS_FILE")
+PARENT_BOT_TOKEN=$(jq -r '.parent_telegram_bot_token // .telegram_bot_token // empty' "$CREDENTIALS_FILE")
+PARENT_CHAT_ID=$(jq -r '.parent_telegram_chat_id // .telegram_chat_id // empty' "$CREDENTIALS_FILE")
+AGENTMAIL_API_KEY=$(jq -r '.agentmail_api_key // empty' "$CREDENTIALS_FILE")
+AGENTMEMORY_API_KEY=$(jq -r '.agentmemory_api_key // empty' "$CREDENTIALS_FILE")
+PINATA_JWT=$(jq -r '.pinata_jwt // empty' "$CREDENTIALS_FILE")
+NOTIFY_EMAIL=$(jq -r '.notify_email // empty' "$CREDENTIALS_FILE")
 
-# Load metadata
-METADATA_FILE="$INSTANCES_DIR/$NAME/metadata.json"
-if [[ ! -f "$METADATA_FILE" ]]; then
-  log_error "Metadata file not found: $METADATA_FILE"
+# Validate required credentials
+[[ -z "$ANTHROPIC_API_KEY" ]] && { log_error "Missing anthropic_api_key"; exit 1; }
+[[ -z "$PARENT_BOT_TOKEN" ]] && { log_error "Missing parent_telegram_bot_token"; exit 1; }
+[[ -z "$PINATA_JWT" ]] && { log_error "Missing pinata_jwt (for AMCP)"; exit 1; }
+
+# Generate unique tokens
+GATEWAY_TOKEN=$(openssl rand -hex 24)
+AMCP_SEED=$(openssl rand -hex 32)
+
+# =============================================================================
+# Verify bot token works
+# =============================================================================
+log_info "Verifying bot token..."
+BOT_INFO=$(curl -s "https://api.telegram.org/bot${BOT_TOKEN}/getMe")
+if [[ $(echo "$BOT_INFO" | jq -r '.ok') != "true" ]]; then
+  log_error "Invalid bot token. Check with @BotFather"
+  echo "$BOT_INFO" | jq '.'
   exit 1
 fi
+BOT_USERNAME=$(echo "$BOT_INFO" | jq -r '.result.username')
+log_success "Bot verified: @${BOT_USERNAME}"
 
-SERVER_IP=$(jq -r '.ip' "$METADATA_FILE")
-SSH_KEY_PATH=$(jq -r '.ssh_key_path' "$METADATA_FILE")
+# =============================================================================
+# Create VM
+# =============================================================================
+log_info "Creating instance: ${BOLD}${INSTANCE_NAME}${NC}"
 
-log_info "Server IP: $SERVER_IP"
-log_info "SSH key: $SSH_KEY_PATH"
-
-# ── Step 2: Bootstrap VM ────────────────────────────────────────────────────
-log_section "Step 2/7: Bootstrap VM (Node.js + Claude Code)"
-
-log_info "Copying bootstrap script to VM..."
-scp -i "$SSH_KEY_PATH" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-  "$SCRIPTS_DIR/bootstrap.sh" root@"$SERVER_IP":/root/bootstrap.sh
-
-log_info "Running bootstrap script on VM..."
-if ! ssh -i "$SSH_KEY_PATH" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-  root@"$SERVER_IP" "bash /root/bootstrap.sh"; then
-  log_error "Bootstrap failed"
-  exit 1
-fi
-
-log_success "VM bootstrapped successfully"
-
-# Update metadata status
-jq '.status = "bootstrapped"' "$METADATA_FILE" > "${METADATA_FILE}.tmp" && mv "${METADATA_FILE}.tmp" "$METADATA_FILE"
-
-# ── Step 3: Install OpenClaw ────────────────────────────────────────────────
-log_section "Step 3/7: Installing OpenClaw Gateway"
-
-if ! "$SCRIPTS_DIR/setup-openclaw.sh" "$NAME" --anthropic-key "$ANTHROPIC_KEY"; then
-  log_error "OpenClaw installation failed"
-  exit 1
-fi
-
-log_success "OpenClaw installed and configured"
-
-# ── Step 4: Setup Tailscale ─────────────────────────────────────────────────
-if [[ "$SKIP_TAILSCALE" == false ]]; then
-  log_section "Step 4/7: Installing Tailscale"
-
-  if ! "$SCRIPTS_DIR/setup-tailscale.sh" "$NAME" --anthropic-key "$ANTHROPIC_KEY"; then
-    log_warn "Tailscale installation failed or was skipped by user"
-  else
-    log_success "Tailscale configured"
-
-    # Reload metadata to get Tailscale IP
-    if jq -e '.tailscale_ip' "$METADATA_FILE" >/dev/null 2>&1; then
-      TAILSCALE_IP=$(jq -r '.tailscale_ip' "$METADATA_FILE")
-      log_info "Tailscale IP: $TAILSCALE_IP"
-    fi
-  fi
+# SSH key
+SSH_KEY_PATH="$HOME/.ssh/openclaw_${INSTANCE_NAME}"
+if [[ -f "$SSH_KEY_PATH" ]]; then
+  log_warn "SSH key exists, reusing"
 else
-  log_info "Skipping Tailscale setup (--skip-tailscale flag)"
+  ssh-keygen -t ed25519 -f "$SSH_KEY_PATH" -N "" -C "openclaw-${INSTANCE_NAME}" -q
+  log_success "SSH key generated"
 fi
 
-# ── Step 5: Setup Skills ────────────────────────────────────────────────────
-if [[ "$SKIP_SKILLS" == false ]]; then
-  log_section "Step 5/7: Configuring OpenAI Skills"
+# Upload to Hetzner
+SSH_KEY_NAME="openclaw-${INSTANCE_NAME}"
+hcloud ssh-key describe "$SSH_KEY_NAME" &>/dev/null && hcloud ssh-key delete "$SSH_KEY_NAME" >/dev/null 2>&1 || true
+hcloud ssh-key create --name "$SSH_KEY_NAME" --public-key-from-file "${SSH_KEY_PATH}.pub" >/dev/null
+log_success "SSH key uploaded"
 
-  if ! "$SCRIPTS_DIR/setup-skills.sh" "$NAME" --openai-key "$OPENAI_KEY"; then
-    log_warn "Skills setup failed"
-  else
-    log_success "Skills configured"
-  fi
-else
-  log_info "Skipping skills setup (--skip-skills flag or no OpenAI key)"
-fi
+# Create server
+log_info "Creating server (~30s)..."
+hcloud server create \
+  --name "$INSTANCE_NAME" \
+  --type "$SERVER_TYPE" \
+  --image ubuntu-24.04 \
+  --location "$REGION" \
+  --ssh-key "$SSH_KEY_NAME" \
+  >/dev/null
 
-# ── Step 6: Setup Monitoring ────────────────────────────────────────────────
-if [[ "$SKIP_MONITORING" == false ]]; then
-  log_section "Step 6/7: Setting up Monitoring"
+INSTANCE_IP=$(hcloud server ip "$INSTANCE_NAME")
+log_success "Server: ${BOLD}${INSTANCE_IP}${NC}"
 
-  if ! "$SCRIPTS_DIR/setup-monitoring.sh" "$NAME"; then
-    log_warn "Monitoring setup failed"
-  else
-    log_success "Monitoring configured"
-  fi
-else
-  log_info "Skipping monitoring setup (--skip-monitoring flag)"
-fi
+# SSH options
+SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
 
-# ── Step 7: Verification ────────────────────────────────────────────────────
-log_section "Step 7/7: Running Verification Checks"
+# Wait for SSH
+log_info "Waiting for SSH..."
+for i in {1..30}; do
+  ssh -i "$SSH_KEY_PATH" $SSH_OPTS -o ConnectTimeout=5 "root@${INSTANCE_IP}" "echo ok" &>/dev/null && break
+  sleep 2
+done
 
-if ! "$SCRIPTS_DIR/verify.sh" "$NAME"; then
-  log_warn "Some verification checks failed"
-else
-  log_success "All verification checks passed"
-fi
+# =============================================================================
+# Notify parent
+# =============================================================================
+curl -s -X POST "https://api.telegram.org/bot${PARENT_BOT_TOKEN}/sendMessage" \
+  -d "chat_id=${PARENT_CHAT_ID}" \
+  -d "text=🚀 Deploying ${INSTANCE_NAME} @ ${INSTANCE_IP}
+Bot: @${BOT_USERNAME}
+Region: ${REGION}" \
+  -d "parse_mode=HTML" >/dev/null
 
-# ── Final Summary ───────────────────────────────────────────────────────────
-echo ""
-echo "════════════════════════════════════════════════════════════════════"
-echo "  ${GREEN}${BOLD}✅ Deployment Complete${NC}"
-echo "════════════════════════════════════════════════════════════════════"
-echo ""
+# =============================================================================
+# Upload and run master setup
+# =============================================================================
+log_info "Uploading setup script..."
 
-# Reload final metadata
-SERVER_IP=$(jq -r '.ip' "$METADATA_FILE")
-TAILSCALE_IP=$(jq -r '.tailscale_ip // "N/A"' "$METADATA_FILE")
-STATUS=$(jq -r '.status' "$METADATA_FILE")
+TEMP_SCRIPT=$(mktemp)
+sed \
+  -e "s|__INSTANCE_NAME__|${INSTANCE_NAME}|g" \
+  -e "s|__INSTANCE_IP__|${INSTANCE_IP}|g" \
+  -e "s|__ANTHROPIC_API_KEY__|${ANTHROPIC_API_KEY}|g" \
+  -e "s|__BOT_TOKEN__|${BOT_TOKEN}|g" \
+  -e "s|__BOT_USERNAME__|${BOT_USERNAME}|g" \
+  -e "s|__PARENT_BOT_TOKEN__|${PARENT_BOT_TOKEN}|g" \
+  -e "s|__PARENT_CHAT_ID__|${PARENT_CHAT_ID}|g" \
+  -e "s|__AGENTMAIL_API_KEY__|${AGENTMAIL_API_KEY}|g" \
+  -e "s|__AGENTMEMORY_API_KEY__|${AGENTMEMORY_API_KEY}|g" \
+  -e "s|__PINATA_JWT__|${PINATA_JWT}|g" \
+  -e "s|__NOTIFY_EMAIL__|${NOTIFY_EMAIL}|g" \
+  -e "s|__GATEWAY_TOKEN__|${GATEWAY_TOKEN}|g" \
+  -e "s|__AMCP_SEED__|${AMCP_SEED}|g" \
+  -e "s|__CHECKPOINT_INTERVAL__|${CHECKPOINT_INTERVAL}|g" \
+  "$SCRIPTS_DIR/master-setup.sh" > "$TEMP_SCRIPT"
 
-echo "  ${BOLD}Instance:${NC}        $NAME"
-echo "  ${BOLD}Status:${NC}          $STATUS"
-echo "  ${BOLD}Region:${NC}          $REGION"
+scp -i "$SSH_KEY_PATH" $SSH_OPTS "$TEMP_SCRIPT" "root@${INSTANCE_IP}:/root/setup.sh"
+rm -f "$TEMP_SCRIPT"
+
+# Fire and forget
+ssh -i "$SSH_KEY_PATH" $SSH_OPTS "root@${INSTANCE_IP}" \
+  "chmod +x /root/setup.sh && nohup /root/setup.sh > /var/log/openclaw-setup.log 2>&1 &"
+
+log_success "Setup launched (fire & forget)"
+
+# =============================================================================
+# Save metadata
+# =============================================================================
+mkdir -p "$INSTANCES_DIR/$INSTANCE_NAME"
+cat > "$INSTANCES_DIR/$INSTANCE_NAME/metadata.json" << EOF
+{
+  "name": "${INSTANCE_NAME}",
+  "ip": "${INSTANCE_IP}",
+  "region": "${REGION}",
+  "server_type": "${SERVER_TYPE}",
+  "status": "deploying",
+  "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "ssh_key_path": "${SSH_KEY_PATH}",
+  "gateway_token": "${GATEWAY_TOKEN}",
+  "bot_username": "${BOT_USERNAME}",
+  "bot_token_hint": "${BOT_TOKEN:0:10}...",
+  "email": "${INSTANCE_NAME}@agentmail.to",
+  "amcp_enabled": true,
+  "checkpoint_interval": "${CHECKPOINT_INTERVAL}"
+}
+EOF
+
+# =============================================================================
+# Done
+# =============================================================================
 echo ""
-echo "  ${BOLD}Access:${NC}"
-echo "    SSH:           ssh -i $SSH_KEY_PATH openclaw@$SERVER_IP"
-if [[ "$TAILSCALE_IP" != "N/A" ]]; then
-echo "    Tailscale:     ssh openclaw@$TAILSCALE_IP"
-fi
+echo -e "${GREEN}${BOLD}════════════════════════════════════════════════════════════${NC}"
+echo -e "${GREEN}${BOLD}  🦞 Deploying: ${INSTANCE_NAME}${NC}"
+echo -e "${GREEN}${BOLD}════════════════════════════════════════════════════════════${NC}"
 echo ""
-echo "  ${BOLD}OpenClaw Gateway:${NC}"
-echo "    Status:        systemctl --user status openclaw-gateway"
-echo "    Logs:          journalctl --user -u openclaw-gateway -f"
+echo -e "  ${BOLD}IP:${NC}        ${INSTANCE_IP}"
+echo -e "  ${BOLD}Region:${NC}    ${REGION}"
+echo -e "  ${BOLD}Bot:${NC}       @${BOT_USERNAME}"
+echo -e "  ${BOLD}Email:${NC}     ${INSTANCE_NAME}@agentmail.to (creating...)"
+echo -e "  ${BOLD}AMCP:${NC}      Enabled (checkpoints every ${CHECKPOINT_INTERVAL})"
 echo ""
-echo "  ${BOLD}Quick Reference:${NC}"
-echo "    Location:      ~/QUICKREF.md on the VM"
-echo "    View:          ssh -i $SSH_KEY_PATH openclaw@$SERVER_IP cat QUICKREF.md"
+echo -e "  ${BOLD}SSH:${NC}       ssh -i ${SSH_KEY_PATH} root@${INSTANCE_IP}"
+echo -e "  ${BOLD}Logs:${NC}      ssh ... 'tail -f /var/log/openclaw-setup.log'"
 echo ""
-echo "  ${BOLD}Next Steps:${NC}"
-echo "    1. Configure Telegram bot token:"
-echo "       ssh -i $SSH_KEY_PATH openclaw@$SERVER_IP"
-echo "       openclaw channels telegram setup"
-echo ""
-echo "    2. View instance status:"
-echo "       ./scripts/status.sh $NAME"
-echo ""
-echo "    3. List all instances:"
-echo "       ./scripts/list.sh"
-echo ""
-echo "════════════════════════════════════════════════════════════════════"
+echo -e "  ${CYAN}Child is setting up. Watch Telegram for updates.${NC}"
 echo ""

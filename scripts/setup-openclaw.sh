@@ -91,7 +91,7 @@ fi
 
 # Read metadata
 IP=$(jq -r '.ip' "$METADATA_FILE")
-SSH_KEY=$(jq -r '.ssh_key' "$METADATA_FILE")
+SSH_KEY=$(jq -r '.ssh_key_path // .ssh_key' "$METADATA_FILE")
 
 if [[ -z "$IP" ]] || [[ "$IP" == "null" ]]; then
   log_error "No IP address found in metadata"
