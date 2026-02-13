@@ -17,7 +17,7 @@
   {"category": "messaging","description": "Create send-message.sh to send messages to any child instance","passes": true},
   {"category": "messaging","description": "Create receive-check.sh to check for new messages/events on an instance","passes": true},
   {"category": "control","description": "Create restart.sh to restart OpenClaw gateway on an instance","passes": true},
-  {"category": "control","description": "Create update.sh to update OpenClaw version on an instance","passes": false},
+  {"category": "control","description": "Create update.sh to update OpenClaw version on an instance","passes": true},
   {"category": "control","description": "Create logs.sh to fetch and display logs from an instance","passes": false},
   {"category": "control","description": "Create config-view.sh to view/update config on an instance","passes": false},
   {"category": "monitoring","description": "Create monitor-all.sh that checks ALL instances and alerts on issues","passes": false},
