@@ -247,3 +247,16 @@ ALL TASKS COMPLETE - OpenClaw Deploy v1.0 Ready
 - Clear step-by-step output with color-coded status
 - Syntax verified with bash -n for both scripts
 - All requirements met per specs/prd-v1.json task 16
+
+- ✅ Task 17: approve-user.sh created and verified
+- Script accepts instance name and pairing code as arguments
+- Validates pairing code format (6 digits)
+- SSH to VM and runs: openclaw pairing approve telegram CODE
+- Supports --list flag to show pending pairing requests
+- Outputs approval confirmation and next steps
+- Provides guidance on sending welcome messages
+- Clear error handling for invalid codes, connection issues
+- Color-coded output with status indicators
+- Usage examples and help text included
+- Syntax verified with bash -n
+- All requirements met per specs/prd-v1.json task 17
