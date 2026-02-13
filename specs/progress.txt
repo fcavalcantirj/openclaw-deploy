@@ -99,6 +99,22 @@
 - Syntax verified with bash -n
 - All requirements met per specs/prd-v1.json task 10
 
+## 2026-02-13 21:00
+- ✅ Task 11: destroy.sh created and verified
+- Script accepts instance name as first argument
+- Requires --confirm flag or interactive "destroy" confirmation
+- Attempts Tailscale logout on VM before destruction (graceful if offline)
+- Deletes Hetzner server with confirmation check
+- Removes SSH key from Hetzner (uses correct naming: openclaw-{name})
+- Deletes local SSH keys (reads path from metadata)
+- Archives instance metadata to instances/.archive/ with timestamp
+- Adds destroyed_at timestamp to archived metadata
+- Lists available instances if specified instance not found
+- Idempotent: handles already-deleted resources gracefully
+- Clear step-by-step output with status indicators
+- Syntax verified with bash -n
+- All requirements met per specs/prd-v1.json task 11
+
 ## Tasks
 1. ✅ provision.sh - create VM
 2. ✅ bootstrap.sh - install Node + Claude Code
@@ -109,7 +125,7 @@
 7. ✅ setup-monitoring.sh - healthcheck timer
 8. ✅ verify.sh - full checklist
 9. ✅ deploy.sh - master orchestrator
-10. destroy.sh - teardown
+10. ✅ destroy.sh - teardown
 11. status.sh + list.sh - management
 12. templates/openclaw.json - base config
 13. README.md - documentation
