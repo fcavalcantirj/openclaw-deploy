@@ -32,7 +32,7 @@
 - config-view.sh ✓ — view/edit config
 
 ### Monitoring (2)
-- monitor-all.sh — check ALL instances
+- monitor-all.sh ✓ — check ALL instances
 - heartbeat integration — monitor from parent
 
 ### Recovery (1)
