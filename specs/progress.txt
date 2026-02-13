@@ -17,7 +17,7 @@
 - templates/openclaw.json ✓
 
 ### Telegram & User Onboarding (3)
-- setup-telegram-bot.sh — configure bot token
+- setup-telegram-bot.sh ✓ — configure bot token
 - approve-user.sh — pairing approval
 - user-onboard.sh — full user flow
 

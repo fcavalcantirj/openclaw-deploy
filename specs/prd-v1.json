@@ -11,7 +11,7 @@
   {"category": "teardown","description": "Create destroy.sh for clean teardown","passes": true},
   {"category": "management","description": "Create status.sh and list.sh for instance management","passes": true},
   {"category": "templates","description": "Create templates/openclaw.json base config","passes": true},
-  {"category": "telegram","description": "Create setup-telegram-bot.sh to configure bot token and restart gateway","passes": false},
+  {"category": "telegram","description": "Create setup-telegram-bot.sh to configure bot token and restart gateway","passes": true},
   {"category": "telegram","description": "Create approve-user.sh for pairing approval (list pending, approve by code)","passes": false},
   {"category": "telegram","description": "Create user-onboard.sh to orchestrate: set bot, notify user, wait for pairing, approve","passes": false},
   {"category": "messaging","description": "Create send-message.sh to send messages to any child instance","passes": false},
