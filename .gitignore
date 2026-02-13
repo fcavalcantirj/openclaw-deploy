@@ -21,3 +21,11 @@ instances/.archive/
 
 # Temp files
 *.tmp
+instances/*/INSTANCE-INFO.md
+
+# Instance-specific data (contains IPs, tokens)
+instances/*/
+credentials.json
+hcloud-verified.json
+*.json
+!templates/*.json

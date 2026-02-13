@@ -1,7 +1,0 @@
-{
-  "verified_at": "2026-02-13T00:00:00Z",
-  "hcloud_version": "1.61.0",
-  "context": "openclaw",
-  "connectivity_test": "passed",
-  "server_list_test": "passed"
-}
