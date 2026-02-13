@@ -120,10 +120,62 @@ fi
 
 1. Find next `passes: false` in specs/prd-v1.json
 2. Write the script/file
-3. Code review: does it follow the patterns?
+3. Verify script quality (see Testing section below)
 4. Update specs/progress.txt
-5. Set passes: true
+5. Set passes: true in specs/prd-v1.json
 6. Commit and push
+
+---
+
+## Testing
+
+### Verification Approach
+
+Scripts are verified through **code review and syntax checking**, NOT by actually deploying VMs.
+
+**Always verify:**
+```bash
+# 1. Bash syntax check
+bash -n script.sh
+
+# 2. JSON syntax check (for templates)
+jq . file.json
+
+# 3. Code review checklist:
+#    - Follows script patterns from CLAUDE.md
+#    - Idempotent (safe to run multiple times)
+#    - Proper error handling (exit on failure)
+#    - No hardcoded credentials
+#    - Clear status messages
+#    - Uses color coding consistently
+```
+
+**Why no VM testing?**
+- Creating/destroying VMs costs money
+- Testing is time-consuming (5-10 min per deployment)
+- Scripts are designed to be idempotent (safe to retry)
+- Syntax check catches most errors
+- Code review ensures patterns are followed
+
+**What makes scripts idempotent:**
+- Check if resources exist before creating
+- Skip operations if already done
+- Use `|| true` for non-critical commands
+- Validate state before modifying
+
+**Example idempotent pattern:**
+```bash
+# Check if already installed
+if ! command -v openclaw &> /dev/null; then
+  npm install -g openclaw
+fi
+
+# Skip if already configured
+if [ -f ~/.openclaw/openclaw.json ]; then
+  echo "Already configured, skipping"
+  exit 0
+fi
+```
 
 ---
 

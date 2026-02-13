@@ -194,6 +194,23 @@
 - Development guidelines and contribution instructions
 - All requirements met per specs/prd-v1.json task 14
 
+## 2026-02-13 23:30
+- ✅ Task 15: CLAUDE.md updated with testing workflow
+- Added comprehensive Testing section:
+  - Verification approach: code review + syntax checking (not VM deployment)
+  - Always verify: bash -n for scripts, jq for JSON, code review checklist
+  - Explains why no VM testing (cost, time, idempotent design)
+  - Idempotent pattern examples and best practices
+- Updated Workflow section:
+  - Step 3: "Verify script quality" instead of generic "code review"
+  - Step 5: Explicit "Set passes: true in specs/prd-v1.json"
+  - Clear reference to Testing section
+- Golden rules already covered:
+  - Rule 1: Write scripts, don't deploy
+  - Rule 3: Scripts must be idempotent
+  - Rules 4-5: Security and error handling
+- All requirements met per specs/prd-v1.json task 15
+
 ## Tasks
 1. ✅ provision.sh - create VM
 2. ✅ bootstrap.sh - install Node + Claude Code
@@ -208,4 +225,8 @@
 11. ✅ status.sh + list.sh - management
 12. ✅ templates/openclaw.json - base config
 13. ✅ README.md - documentation
-14. CLAUDE.md - guidelines
+14. ✅ CLAUDE.md - guidelines
+
+═══════════════════════════════════════════════════════════
+ALL TASKS COMPLETE - OpenClaw Deploy v1.0 Ready
+═══════════════════════════════════════════════════════════
