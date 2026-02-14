@@ -272,5 +272,120 @@
       "Verify: deployed auth-profiles.json matches template"
     ],
     "passes": true
+  },
+  {
+    "category": "integration",
+    "description": "Install Claude Code CLI on child VMs during master-setup.sh",
+    "steps": [
+      "Add npm install -g @anthropic-ai/claude-code step after Node.js installation in master-setup.sh",
+      "Make installation idempotent: check if already installed before reinstalling",
+      "Verify: claude --version returns version on deployed child VM"
+    ],
+    "passes": true
+  },
+  {
+    "category": "integration",
+    "description": "Store ANTHROPIC_API_KEY in proactive-amcp config during master-setup.sh",
+    "steps": [
+      "Add proactive-amcp config set anthropic.apiKey alongside existing config set calls",
+      "Verify: proactive-amcp config get anthropic.apiKey returns key on child VM"
+    ],
+    "passes": true
+  },
+  {
+    "category": "cli",
+    "description": "Update claw diagnose to delegate to proactive-amcp diagnose on child VM",
+    "steps": [
+      "Replace prompt-template upload approach with SSH call to proactive-amcp diagnose on child",
+      "Child handles Claude invocation, Solvr workflow, and JSON output locally",
+      "Parent passes ANTHROPIC_API_KEY as fallback (child config takes precedence)",
+      "Parse JSON output from child, handle non-JSON gracefully",
+      "Verify: claw diagnose <child> returns JSON with solvr fields"
+    ],
+    "passes": true
+  },
+  {
+    "category": "cli",
+    "description": "Add claw diagnose self for local parent diagnosis",
+    "steps": [
+      "Add 'self' target to cmd_diagnose that runs proactive-amcp diagnose locally",
+      "Skip SSH, run directly on parent machine",
+      "Verify: claw diagnose self returns JSON health report"
+    ],
+    "passes": true
+  },
+  {
+    "category": "bugfix",
+    "description": "Fix SSH user: scripts hardcode 'openclaw@' but VMs use root — add ssh_user to metadata.json with root default, update all scripts",
+    "steps": [
+      "Add ssh_user field support to load_instance() in lib/common.sh: INSTANCE_SSH_USER=$(jq -r '.ssh_user // \"root\"' \"$meta_file\")",
+      "Update ssh_exec() in lib/common.sh to use $INSTANCE_SSH_USER instead of hardcoded 'root@'",
+      "Update ssh_check() in lib/common.sh to use $INSTANCE_SSH_USER instead of hardcoded 'root@'",
+      "Fix list.sh check_reachable(): replace hardcoded 'openclaw@$ip' with ssh_user from metadata (default root)",
+      "Fix status.sh: replace all 'openclaw@$SERVER_IP' references with ssh_user from metadata (default root) — lines 101, 122, 131, 142, 151, 162, 171, 180, 192, 202",
+      "Fix monitor-all.sh check_instance(): replace 'openclaw@$ip' with ssh_user from metadata (default root) — lines 139, 146, 155, 164, 173",
+      "Fix monitor-all.sh get_instance_details(): replace 'openclaw@$ip' with ssh_user from metadata (default root) — lines 198, 201, 204, 207",
+      "Fix restart.sh: replace all 'openclaw@$IP' references with ssh_user from metadata (default root) — lines 95, 103, 119, 135, 147, 154, 172",
+      "Update dana's metadata.json: add '\"ssh_user\": \"root\"'",
+      "Verify: list.sh shows dana as 'online' not 'offline'",
+      "Verify: grep -rn 'openclaw@' scripts/ returns zero matches in operational scripts (only docs/comments)"
+    ],
+    "passes": false
+  },
+  {
+    "category": "bugfix",
+    "description": "Fix restart.sh JSON field name: reads '.ssh_key' but metadata uses 'ssh_key_path' — causes 'SSH key not found at null'",
+    "steps": [
+      "Fix restart.sh line 78: change jq -r '.ssh_key' to jq -r '.ssh_key_path // .ssh_key // empty' (matches list.sh and status.sh pattern)",
+      "Add null/empty validation after SSH_KEY extraction: if [[ -z \"$SSH_KEY\" || \"$SSH_KEY\" == \"null\" || ! -f \"$SSH_KEY\" ]]; then error; fi",
+      "Refactor restart.sh to source lib/common.sh and use load_instance() + ssh_exec() instead of duplicating SSH logic",
+      "Verify: ./scripts/restart.sh dana does not print 'SSH key not found at null'",
+      "Verify: bash -n passes on modified restart.sh"
+    ],
+    "passes": false
+  },
+  {
+    "category": "management",
+    "description": "Create import.sh — import existing Hetzner servers not tracked by CLI into instances/ directory",
+    "steps": [
+      "Create scripts/import.sh accepting: instance-name, IP, SSH key path as required arguments",
+      "Validate arguments: name must be alphanumeric+hyphen, IP must be valid format, SSH key file must exist",
+      "Create instances/<name>/ directory and metadata.json with: name, ip, ssh_user (default root), ssh_key_path, status 'imported', imported_at timestamp",
+      "Run SSH connectivity test after import: ssh -i key root@ip 'echo ok'",
+      "If SSH succeeds: probe for OpenClaw version, gateway status, update metadata with discovered info",
+      "If SSH fails: warn but still create metadata (instance may need different SSH key or user)",
+      "Refuse to overwrite existing instance: if instances/<name>/metadata.json exists, error with 'already tracked'",
+      "Verify: ./scripts/import.sh jack 46.225.128.59 ~/.ssh/openclaw_jack creates valid metadata.json",
+      "Verify: ./scripts/list.sh shows imported instance after import",
+      "Verify: bash -n passes on import.sh"
+    ],
+    "passes": false
+  },
+  {
+    "category": "bugfix",
+    "description": "Migrate scripts not using lib/common.sh — list.sh, status.sh, monitor-all.sh, restart.sh should source common.sh for SSH helpers",
+    "steps": [
+      "Refactor list.sh to source lib/common.sh: use load_instance() for metadata, ssh_check() for reachability, remove duplicate color/function definitions",
+      "Refactor status.sh to source lib/common.sh: use load_instance() + ssh_exec() for all SSH calls, remove duplicate color/function definitions",
+      "Refactor monitor-all.sh check_instance() to source lib/common.sh: use load_instance() + ssh_exec(), remove inline SSH calls",
+      "Refactor restart.sh to source lib/common.sh: use load_instance() + ssh_exec(), remove duplicate error/info/success functions",
+      "Verify: all four scripts use INSTANCE_SSH_USER from load_instance() — single source of truth for SSH user",
+      "Verify: grep -c 'source.*common.sh' scripts/{list,status,monitor-all,restart}.sh returns 4 (all source it)",
+      "Verify: bash -n passes on all four modified scripts"
+    ],
+    "passes": false
+  },
+  {
+    "category": "testing",
+    "description": "Verify CLI fixes end-to-end: all 4 servers reachable, list/status/restart/monitor work correctly",
+    "steps": [
+      "Import missing servers: jack (46.225.128.59), bruce-russo (138.199.218.151), clawd-bruv-ubuntu (157.180.67.193)",
+      "Verify: ./scripts/list.sh shows all 4 instances with 'online' reachability",
+      "Verify: ./scripts/status.sh dana completes live checks without SSH errors",
+      "Verify: ./scripts/restart.sh dana restarts gateway without 'SSH key not found' error",
+      "Verify: ./scripts/monitor-all.sh reports correct health status for all instances",
+      "Verify: grep confirms zero hardcoded 'openclaw@' in operational scripts"
+    ],
+    "passes": false
   }
 ]

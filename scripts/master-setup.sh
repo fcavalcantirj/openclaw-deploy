@@ -104,6 +104,15 @@ main() {
   log "AMCP CLI: $(amcp --version 2>/dev/null || echo 'installed')"
 
   # -------------------------------------------------------------------------
+  # Step 2b2: Install Claude Code CLI
+  # -------------------------------------------------------------------------
+  notify "Installing Claude Code CLI..."
+  if ! command -v claude &>/dev/null; then
+    npm install -g @anthropic-ai/claude-code || fail "Claude Code CLI install failed"
+  fi
+  log "Claude Code: $(claude --version 2>/dev/null || echo 'installed')"
+
+  # -------------------------------------------------------------------------
   # Step 2c: Install proactive-amcp
   # -------------------------------------------------------------------------
   notify "Installing proactive-amcp..."
@@ -198,6 +207,9 @@ main() {
   proactive-amcp config set parent_bot_token "$PARENT_BOT_TOKEN" --amcp-dir "$AMCP_DIR" || log "Warning: failed to set parent_bot_token"
   proactive-amcp config set parent_chat_id "$PARENT_CHAT_ID" --amcp-dir "$AMCP_DIR" || log "Warning: failed to set parent_chat_id"
   proactive-amcp config set instance_name "$INSTANCE_NAME" --amcp-dir "$AMCP_DIR" || log "Warning: failed to set instance_name"
+
+  # Store Anthropic API key (needed for proactive-amcp diagnose)
+  proactive-amcp config set anthropic.apiKey "$ANTHROPIC_API_KEY" --amcp-dir "$AMCP_DIR" || log "Warning: failed to set anthropic.apiKey"
 
   # Store Solvr credentials (if child was registered)
   if [[ -n "$CHILD_SOLVR_API_KEY" ]]; then

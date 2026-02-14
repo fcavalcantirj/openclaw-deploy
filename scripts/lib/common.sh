@@ -68,7 +68,8 @@ load_instance() {
   fi
 
   INSTANCE_IP=$(jq -r '.ip // empty' "$meta_file")
-  INSTANCE_SSH_KEY=$(jq -r '.ssh_key_path // empty' "$meta_file")
+  INSTANCE_SSH_KEY=$(jq -r '.ssh_key_path // .ssh_key // empty' "$meta_file")
+  INSTANCE_SSH_USER=$(jq -r '.ssh_user // "root"' "$meta_file")
   INSTANCE_REGION=$(jq -r '.region // "unknown"' "$meta_file")
   INSTANCE_STATUS=$(jq -r '.status // "unknown"' "$meta_file")
   INSTANCE_BOT=$(jq -r '.bot_username // empty' "$meta_file")
@@ -96,7 +97,7 @@ ssh_exec() {
     return 1
   fi
 
-  ssh -i "$INSTANCE_SSH_KEY" $SSH_OPTS "root@${INSTANCE_IP}" "$@"
+  ssh -i "$INSTANCE_SSH_KEY" $SSH_OPTS "${INSTANCE_SSH_USER}@${INSTANCE_IP}" "$@"
 }
 
 # Check SSH connectivity (returns 0 if reachable)
@@ -111,7 +112,7 @@ ssh_check() {
   fi
 
   ssh -i "$INSTANCE_SSH_KEY" $SSH_OPTS -o "ConnectTimeout=$timeout" \
-    "root@${INSTANCE_IP}" "echo ok" &>/dev/null
+    "${INSTANCE_SSH_USER}@${INSTANCE_IP}" "echo ok" &>/dev/null
 }
 
 # ── Metadata helpers ────────────────────────────────────────────────────────
