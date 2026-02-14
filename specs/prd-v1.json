@@ -204,7 +204,7 @@
       "On success: send summary to parent Telegram (calm tone)",
       "Verify: Solvr workflow runs end-to-end, escalation fires after 3 failed attempts"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "cli",

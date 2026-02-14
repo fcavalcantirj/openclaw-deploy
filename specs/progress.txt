@@ -133,3 +133,18 @@
 - Escalation: sends Telegram + email to parent after 3 failures
 - Placeholders: {{INSTANCE_NAME}}, {{DIAGNOSE_OUTPUT}}, {{SOLVR_FIX_SECTION}}, {{ESCALATION_SECTION}}
 - Output format: JSON with fixed/failed/escalated counts, fix details, and escalation records
+
+## 2026-02-14: Add 'claw fix' command to CLI
+- Added cmd_fix to claw CLI (claw:345-530)
+- Step 1: Runs cmd_diagnose internally, exits if healthy or diagnose fails
+- Step 2: Gathers Solvr key from VM, Anthropic key from credentials/env
+- Step 3: Reads parent notification config from metadata (telegram_token, chat_id, email)
+- Step 4: Loads templates/fix-prompt.md, builds Solvr fix section with curl commands
+- Step 5: Builds escalation section with Telegram/email notification commands
+- Step 6: Replaces all placeholders (INSTANCE_NAME, DIAGNOSE_OUTPUT, SOLVR_FIX_SECTION, ESCALATION_SECTION)
+- Step 7: Uploads prompt to VM, runs Claude Code with --print
+- Step 8: Parses JSON result, sends calm success summary or escalation to parent Telegram
+- On success: calm Telegram msg "auto-fixed N issue(s). All checks passing now."
+- On escalation: Claude Code sends Telegram alert with error details and approaches tried
+- Added to usage, examples, and case dispatch
+- claw CLI: 600 lines (under 800 limit), bash -n syntax check passes

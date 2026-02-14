@@ -33,6 +33,7 @@ ${BOLD}Commands:${NC}
   ${GREEN}restart${NC} NAME                           Restart child gateway
   ${GREEN}destroy${NC} NAME                           Destroy child instance
   ${GREEN}diagnose${NC} NAME                           Run health checks + Solvr search
+  ${GREEN}fix${NC} NAME                               Fix issues via Solvr, escalate after 3 failures
   ${GREEN}ssh${NC} NAME                               SSH into child (for debugging)
 
 ${BOLD}Examples:${NC}
@@ -40,6 +41,7 @@ ${BOLD}Examples:${NC}
   claw list
   claw approve bruce 3R7YX6KS
   claw diagnose bruce
+  claw fix bruce
   claw message bruce "Hello from parent!"
   claw logs bruce -f
   claw destroy bruce
@@ -342,6 +344,232 @@ print('')
   fi
 }
 
+cmd_fix() {
+  local name="${1:?Usage: claw fix NAME}"
+  local ip=$(get_meta "$name" "ip")
+  local key=$(get_meta "$name" "ssh_key_path")
+
+  [[ -z "$ip" ]] && { echo "Instance '$name' not found"; exit 1; }
+
+  local ssh_base="ssh -i $key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
+
+  # Step 1: Run diagnose internally
+  echo -e "${BLUE}Step 1: Running diagnosis on $name...${NC}" >&2
+  local diagnose_output
+  diagnose_output=$(cmd_diagnose "$name" 2>/dev/null)
+
+  if [[ -z "$diagnose_output" ]] || ! echo "$diagnose_output" | jq . >/dev/null 2>&1; then
+    echo -e "${RED}Diagnosis failed — cannot proceed with fix${NC}" >&2
+    exit 1
+  fi
+
+  # Check if there are any errors to fix
+  local error_count
+  error_count=$(echo "$diagnose_output" | jq '.checks_failed // 0')
+  if [[ "$error_count" -eq 0 ]]; then
+    echo -e "${GREEN}No issues found — $name is healthy${NC}" >&2
+    echo "$diagnose_output"
+    return 0
+  fi
+
+  echo -e "${YELLOW}Found $error_count issue(s) — attempting fixes...${NC}" >&2
+
+  # Step 2: Gather credentials
+  local solvr_key
+  solvr_key=$($ssh_base "root@$ip" \
+    "proactive-amcp config get solvr_api_key --amcp-dir /home/openclaw/.amcp 2>/dev/null || echo ''" 2>/dev/null)
+  solvr_key=$(echo "$solvr_key" | tr -d '[:space:]')
+
+  local credentials_file="$INSTANCES_DIR/credentials.json"
+  local anthropic_key=""
+  if [[ -f "$credentials_file" ]]; then
+    anthropic_key=$(jq -r '.anthropic_api_key // empty' "$credentials_file")
+  fi
+  if [[ -z "$anthropic_key" ]]; then
+    anthropic_key="${ANTHROPIC_API_KEY:-}"
+  fi
+  if [[ -z "$anthropic_key" ]]; then
+    echo -e "${RED}No ANTHROPIC_API_KEY found in credentials or environment${NC}" >&2
+    exit 1
+  fi
+
+  # Read parent notification config from metadata
+  local meta_file="$INSTANCES_DIR/$name/metadata.json"
+  local parent_telegram_token parent_chat_id parent_email
+  parent_telegram_token=$(jq -r '.parent_telegram_token // empty' "$meta_file" 2>/dev/null)
+  parent_chat_id=$(jq -r '.parent_chat_id // empty' "$meta_file" 2>/dev/null)
+  parent_email=$(jq -r '.parent_email // empty' "$meta_file" 2>/dev/null)
+
+  # Step 3: Load fix prompt template
+  local template_file="$SCRIPT_DIR/templates/fix-prompt.md"
+  if [[ ! -f "$template_file" ]]; then
+    echo -e "${RED}Template not found: $template_file${NC}" >&2
+    exit 1
+  fi
+
+  # Step 4: Build Solvr fix section
+  local solvr_fix_file
+  solvr_fix_file=$(mktemp /tmp/claw-solvr-fix-XXXXXX.txt)
+  if [[ -n "$solvr_key" && "$solvr_key" != "null" ]]; then
+    cat > "$solvr_fix_file" << SOLVREOF
+Search Solvr for existing solutions:
+\`\`\`bash
+curl -s -H "Authorization: Bearer ${solvr_key}" -G --data-urlencode "q=<error description>" "https://api.solvr.dev/v1/problems/search"
+\`\`\`
+
+If a matching approach exists, apply its method. After applying, update the approach status:
+\`\`\`bash
+# Mark as "worked" or "failed"
+curl -s -X PATCH "https://api.solvr.dev/v1/approaches/<approach_id>" -H "Authorization: Bearer ${solvr_key}" -H "Content-Type: application/json" -d '{"status": "worked"}'
+\`\`\`
+
+If NO match found, post a new problem:
+\`\`\`bash
+curl -s -X POST "https://api.solvr.dev/v1/problems" -H "Authorization: Bearer ${solvr_key}" -H "Content-Type: application/json" -d '{"title": "<short title>", "description": "<error details>", "tags": ["openclaw", "gateway", "auto-fix"]}'
+\`\`\`
+
+After attempting a fix, add an approach to the problem:
+\`\`\`bash
+curl -s -X POST "https://api.solvr.dev/v1/problems/<problem_id>/approaches" -H "Authorization: Bearer ${solvr_key}" -H "Content-Type: application/json" -d '{"angle": "<what you tried>", "method": "<exact commands>", "status": "worked|failed"}'
+\`\`\`
+SOLVREOF
+  else
+    echo "No Solvr API key available. Skip all Solvr operations. Set solvr_problem_id and solvr_approach_id to null in output." > "$solvr_fix_file"
+  fi
+
+  # Step 5: Build escalation section
+  local escalation_file
+  escalation_file=$(mktemp /tmp/claw-escalation-XXXXXX.txt)
+  local has_escalation=false
+  if [[ -n "$parent_telegram_token" && -n "$parent_chat_id" ]]; then
+    has_escalation=true
+    cat > "$escalation_file" << ESCEOF
+Send Telegram notification to parent:
+\`\`\`bash
+curl -s -X POST "https://api.telegram.org/bot${parent_telegram_token}/sendMessage" -H "Content-Type: application/json" -d "{\"chat_id\": \"${parent_chat_id}\", \"text\": \"ALERT: Instance ${name} has issues that could not be auto-fixed after 3 attempts.\n\nErrors:\n<list each escalated error>\n\nApproaches tried:\n<list each failed approach>\n\nPlease investigate manually: claw ssh ${name}\", \"parse_mode\": \"HTML\"}"
+\`\`\`
+ESCEOF
+  else
+    echo "No parent Telegram credentials configured. Set telegram_sent to false in escalation output." > "$escalation_file"
+  fi
+
+  if [[ -n "$parent_email" ]]; then
+    cat >> "$escalation_file" << EMAILEOF
+
+Send email notification (if mail command available):
+\`\`\`bash
+echo "ALERT: Instance ${name} has issues that could not be auto-fixed. Please investigate: claw ssh ${name}" | mail -s "OpenClaw Alert: ${name} needs attention" "${parent_email}" 2>/dev/null || true
+\`\`\`
+EMAILEOF
+  else
+    echo "No parent email configured. Set email_sent to false in escalation output." >> "$escalation_file"
+  fi
+
+  # Step 6: Build final prompt with all placeholders replaced
+  local prompt_tmp
+  prompt_tmp=$(mktemp /tmp/claw-fix-XXXXXX.md)
+  trap "rm -f '$prompt_tmp' '$solvr_fix_file' '$escalation_file'" RETURN
+
+  # Escape diagnose JSON for awk insertion
+  local diagnose_file
+  diagnose_file=$(mktemp /tmp/claw-diagnose-out-XXXXXX.json)
+  echo "$diagnose_output" > "$diagnose_file"
+
+  awk -v name="$name" \
+      -v diagnose_f="$diagnose_file" \
+      -v solvr_f="$solvr_fix_file" \
+      -v esc_f="$escalation_file" '
+    { gsub(/\{\{INSTANCE_NAME\}\}/, name) }
+    /\{\{DIAGNOSE_OUTPUT\}\}/ { while ((getline line < diagnose_f) > 0) print line; next }
+    /\{\{SOLVR_FIX_SECTION\}\}/ { while ((getline line < solvr_f) > 0) print line; next }
+    /\{\{ESCALATION_SECTION\}\}/ { while ((getline line < esc_f) > 0) print line; next }
+    { print }
+  ' "$template_file" > "$prompt_tmp"
+  rm -f "$diagnose_file" "$solvr_fix_file" "$escalation_file"
+
+  # Step 7: Upload prompt to VM and run Claude Code
+  local remote_prompt="/tmp/claw-fix-prompt.md"
+  scp -i "$key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+    "$prompt_tmp" "root@${ip}:${remote_prompt}" 2>/dev/null
+
+  echo -e "${BLUE}Step 2: Running Claude Code fix session on $name...${NC}" >&2
+
+  local result
+  result=$($ssh_base -t "root@$ip" \
+    "ANTHROPIC_API_KEY='${anthropic_key}' claude --print \"\$(cat ${remote_prompt})\" ; rm -f ${remote_prompt}" 2>/dev/null)
+
+  # Strip TTY control characters
+  result=$(echo "$result" | tr -d '\r' | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g')
+
+  # Extract JSON from output
+  local json_output
+  json_output=$(echo "$result" | python3 -c "
+import sys, json
+text = sys.stdin.read()
+depth = 0
+start = -1
+for i, c in enumerate(text):
+    if c == '{':
+        if depth == 0:
+            start = i
+        depth += 1
+    elif c == '}':
+        depth -= 1
+        if depth == 0 and start >= 0:
+            candidate = text[start:i+1]
+            try:
+                obj = json.loads(candidate)
+                print(json.dumps(obj))
+                sys.exit(0)
+            except json.JSONDecodeError:
+                start = -1
+print('')
+" 2>/dev/null)
+
+  # Step 8: Process result and handle escalation/notification
+  if [[ -n "$json_output" ]] && echo "$json_output" | jq . >/dev/null 2>&1; then
+    local fixed_count escalated_count
+    fixed_count=$(echo "$json_output" | jq '.fixed // 0')
+    escalated_count=$(echo "$json_output" | jq '.escalated // 0')
+
+    # Send calm summary to parent on success (if all fixed, no escalations)
+    if [[ "$escalated_count" -eq 0 && "$fixed_count" -gt 0 && -n "$parent_telegram_token" && -n "$parent_chat_id" ]]; then
+      local summary_msg="Instance ${name}: auto-fixed ${fixed_count} issue(s). All checks passing now."
+      curl -s -X POST "https://api.telegram.org/bot${parent_telegram_token}/sendMessage" \
+        -H "Content-Type: application/json" \
+        -d "$(jq -n --arg chat_id "$parent_chat_id" --arg text "$summary_msg" '{chat_id: $chat_id, text: $text}')" \
+        >/dev/null 2>&1 || true
+      echo -e "${GREEN}Sent fix summary to parent Telegram${NC}" >&2
+    fi
+
+    if [[ "$escalated_count" -gt 0 ]]; then
+      echo -e "${RED}$escalated_count issue(s) could not be auto-fixed and were escalated${NC}" >&2
+    fi
+    if [[ "$fixed_count" -gt 0 ]]; then
+      echo -e "${GREEN}$fixed_count issue(s) successfully fixed${NC}" >&2
+    fi
+
+    echo "$json_output" | jq .
+  else
+    echo -e "${YELLOW}Warning: Could not parse JSON from Claude Code fix output${NC}" >&2
+    jq -n \
+      --arg instance "$name" \
+      --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      --arg raw_output "$result" \
+      '{
+        instance: $instance,
+        timestamp: $timestamp,
+        total_errors: 0,
+        fixed: 0,
+        failed: 0,
+        escalated: 0,
+        fixes: [],
+        escalations: [],
+        raw_output: $raw_output
+      }'
+  fi
+}
+
 cmd_deploy() {
   "$SCRIPT_DIR/deploy.sh" "$@"
 }
@@ -360,6 +588,7 @@ case "$cmd" in
   list)     cmd_list ;;
   status)   cmd_status "$@" ;;
   diagnose) cmd_diagnose "$@" ;;
+  fix)      cmd_fix "$@" ;;
   approve)  cmd_approve "$@" ;;
   message)  cmd_message "$@" ;;
   logs)     cmd_logs "$@" ;;
