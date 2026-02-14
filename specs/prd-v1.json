@@ -237,7 +237,7 @@
       "Placeholders: DIAGNOSE_OUTPUT, SOLVR_API_KEY, PARENT_TELEGRAM_TOKEN, PARENT_CHAT_ID, INSTANCE_NAME",
       "Verify: covers all Solvr API calls, escalation is loud and clear"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "config",

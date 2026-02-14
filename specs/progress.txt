@@ -122,3 +122,14 @@
 - All functions print JSON to stdout, return 0/1 based on error field presence
 - All use curl with proper auth headers, timeouts, and JSON content-type
 - bash -n syntax check passes
+
+## 2026-02-14: Create templates/fix-prompt.md for Claude Code fix sessions
+- Created templates/fix-prompt.md (109 lines) for Solvr-guided self-healing
+- Input: {{DIAGNOSE_OUTPUT}} JSON from prior claw diagnose run
+- Solvr workflow: search existing solutions → apply fix → PATCH approach status
+- Novel issues: POST problem → try fix → POST approach with status
+- Max 3 attempts per error before escalation
+- Common fixes reference table for 7 health checks (gateway, port, auth, systemd, disk, memory, logs)
+- Escalation: sends Telegram + email to parent after 3 failures
+- Placeholders: {{INSTANCE_NAME}}, {{DIAGNOSE_OUTPUT}}, {{SOLVR_FIX_SECTION}}, {{ESCALATION_SECTION}}
+- Output format: JSON with fixed/failed/escalated counts, fix details, and escalation records
