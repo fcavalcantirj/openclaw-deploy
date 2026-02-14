@@ -94,6 +94,15 @@ main() {
   log "Node: $(node -v), npm: $(npm -v)"
 
   # -------------------------------------------------------------------------
+  # Step 2b: Install amcp-protocol CLI
+  # -------------------------------------------------------------------------
+  notify "Installing amcp-protocol CLI..."
+  if ! command -v amcp &>/dev/null; then
+    npm install -g @amcp/cli || fail "amcp-protocol CLI install failed"
+  fi
+  log "AMCP CLI: $(amcp --version 2>/dev/null || echo 'installed')"
+
+  # -------------------------------------------------------------------------
   # Step 3: Create openclaw user
   # -------------------------------------------------------------------------
   notify "Creating user..."

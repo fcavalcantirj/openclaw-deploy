@@ -1,1 +1,8 @@
 # openclaw-deploy Progress
+
+## 2026-02-14: Install amcp-protocol CLI on VM during master-setup.sh
+- Added Step 2b to scripts/master-setup.sh: idempotent `npm install -g @amcp/cli`
+- Placed after Node 22 install (Step 2) and before user creation (Step 3)
+- Idempotent: checks `command -v amcp` before installing
+- Logs version after install
+- bash -n syntax check passes

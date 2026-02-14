@@ -68,7 +68,7 @@
       "Verify amcp CLI is on PATH: 'amcp --version'",
       "Make installation idempotent: check if already installed before reinstalling"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "integration",
