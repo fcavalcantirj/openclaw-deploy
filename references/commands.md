@@ -159,17 +159,22 @@ SKILL_DIR/claw upgrade NAME [--dry-run]
 
 ### diagnose
 
-Run health diagnostics on a child instance (or self). Uses proactive-amcp diagnose on-VM, which runs 7 checks and searches Solvr for known solutions.
+Run comprehensive health diagnostics on a child instance (or self). Two-layer architecture: parent-side SSH check, then single SSH batch collecting 14 checks.
 
 ```bash
-SKILL_DIR/claw diagnose NAME
-SKILL_DIR/claw diagnose self
+SKILL_DIR/claw diagnose NAME          # human-readable colored report
+SKILL_DIR/claw diagnose NAME --json   # machine-consumable JSON
+SKILL_DIR/claw diagnose self          # local self-diagnosis
 ```
 
-- `NAME`: runs proactive-amcp diagnose remotely via SSH
-- `self`: runs proactive-amcp diagnose locally on parent
+| Flag | Description |
+|------|-------------|
+| `--json` | Output machine-consumable JSON instead of colored report |
 
-Output: structured JSON with checks_passed, checks_failed, errors, solvr_matches.
+Checks (13 total):
+1. SSH connectivity, 2. Gateway process, 3. Health endpoint, 4. Session corruption, 5. Config JSON validity, 6. Disk space, 7. Memory, 8. Claude Code CLI, 9. Claude Code auth (OAuth), 10. Anthropic API key validity, 11. User mismatch, 12. AMCP identity, 13. AMCP config completeness + last checkpoint age.
+
+Default output: human-readable colored report grouped by category (Connectivity, Authentication, AMCP, System). Use `--json` for backward-compatible JSON with `checks_passed`, `checks_failed`, `checks`, `errors`.
 
 ### fix
 
@@ -185,6 +190,80 @@ Flow:
 3. Claude Code applies fixes on-VM
 4. Reports fixed/escalated counts
 5. Sends Telegram summary to parent
+
+---
+
+## AMCP Management
+
+### setup-amcp
+
+One-command AMCP bootstrap on a child instance. Each step is idempotent.
+
+```bash
+SKILL_DIR/claw setup-amcp NAME [--force] [--dry-run]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--force` | Recreate identity even if one exists |
+| `--dry-run` | Preview what would be done without making changes |
+
+Steps performed:
+1. SSH connectivity check
+2. Install amcp CLI (if missing)
+3. Install proactive-amcp (if missing)
+4. Create AMCP identity (real KERI, skips if exists unless `--force`)
+5. Push config from parent credentials.json
+6. Install watchdog service (if not active)
+7. Run first checkpoint
+8. Update instance metadata
+
+Example:
+```bash
+SKILL_DIR/claw setup-amcp jack --dry-run    # Preview
+SKILL_DIR/claw setup-amcp jack              # Full bootstrap
+SKILL_DIR/claw setup-amcp jack --force      # Recreate identity
+```
+
+### config
+
+View or set AMCP config (`~/.amcp/config.json`) on a child instance.
+
+```bash
+SKILL_DIR/claw config NAME                  # default: --show
+SKILL_DIR/claw config NAME --show           # display config (secrets masked)
+SKILL_DIR/claw config NAME --set key=value  # set a single key
+SKILL_DIR/claw config NAME --push           # bulk push from credentials.json
+```
+
+| Flag | Description |
+|------|-------------|
+| `--show` | Display config with secrets masked (default) |
+| `--set key=val` | Set a single config key via proactive-amcp |
+| `--push` | Bulk push keys from local credentials.json |
+
+Key mapping for `--push` (credentials.json key -> AMCP config key):
+- `pinata_jwt` -> `pinata_jwt`
+- `anthropic_api_key` -> `anthropic.apiKey`
+- `solvr_api_key` -> `solvr_api_key`
+- `parent_telegram_bot_token` -> `parent_bot_token`
+- `parent_telegram_chat_id` -> `parent_chat_id`
+- `agentmail_api_key` -> `notify.agentmailApiKey`
+- `notify_email` -> `notify.emailTo`
+
+### checkpoint
+
+Trigger an AMCP checkpoint on a child instance.
+
+```bash
+SKILL_DIR/claw checkpoint NAME [--full]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--full` | Full checkpoint with secrets (default: quick checkpoint) |
+
+Detects service user and runs checkpoint as the correct user. Reports CID and updates instance metadata.
 
 ---
 
@@ -225,8 +304,11 @@ Uses the SSH key stored in the instance metadata.
 | `logs` | `NAME [-f]` | View/follow logs |
 | `restart` | `NAME` | Restart gateway |
 | `destroy` | `NAME` | Tear down instance |
-| `diagnose` | `NAME\|self` | Run health diagnostics |
+| `diagnose` | `NAME\|self [--json]` | Run 13 health checks |
 | `fix` | `NAME` | Auto-fix with escalation |
 | `upgrade` | `NAME [--dry-run]` | Upgrade tool stack |
+| `setup-amcp` | `NAME [--force\|--dry-run]` | Bootstrap AMCP on child |
+| `config` | `NAME [--show\|--set\|--push]` | View/set AMCP config |
+| `checkpoint` | `NAME [--full]` | Run checkpoint on child |
 | `shell` | `NAME` | Interactive Claude Code |
 | `ssh` | `NAME` | Direct SSH access |

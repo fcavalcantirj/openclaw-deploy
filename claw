@@ -8,9 +8,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/scripts/lib/common.sh"
 INSTANCES_DIR="$SCRIPT_DIR/instances"
 
-# Additional style vars (common.sh already defines colors)
-BOLD='\033[1m'
-
 usage() {
   cat <<EOF
 ${BOLD}claw — OpenClaw Child Instance Manager${NC}
@@ -28,9 +25,12 @@ ${BOLD}Commands:${NC}
   ${GREEN}logs${NC} NAME [-f]                         View child logs (-f to follow)
   ${GREEN}restart${NC} NAME                           Restart child gateway
   ${GREEN}destroy${NC} NAME                           Destroy child instance
-  ${GREEN}diagnose${NC} NAME|self                      Run health checks + Solvr search
+  ${GREEN}diagnose${NC} NAME|self                      Run health checks (14 checks)
   ${GREEN}fix${NC} NAME                               Fix issues via Solvr, escalate after 3 failures
   ${GREEN}upgrade${NC} NAME [--dry-run]                Upgrade tool stack on child
+  ${GREEN}setup-amcp${NC} NAME [--force|--dry-run]     Bootstrap AMCP identity + config + watchdog
+  ${GREEN}config${NC} NAME [--show|--set k=v|--push]  View/set AMCP config on child
+  ${GREEN}checkpoint${NC} NAME [--full]                Run checkpoint on child
   ${GREEN}shell${NC} NAME                              Interactive Claude Code on child
   ${GREEN}ssh${NC} NAME                               SSH into child (for debugging)
 
@@ -38,11 +38,12 @@ ${BOLD}Examples:${NC}
   claw deploy --name bruce --bot-token "123:ABC..."
   claw list
   claw approve bruce 3R7YX6KS
-  claw diagnose self
   claw diagnose bruce
   claw fix bruce
+  claw setup-amcp bruce
+  claw config bruce --show
+  claw checkpoint bruce
   claw shell bruce
-  claw message bruce "Hello from parent!"
   claw logs bruce -f
   claw destroy bruce
 
@@ -50,127 +51,73 @@ EOF
   exit 1
 }
 
-# Get instance metadata
-get_meta() {
-  local name="$1"
-  local field="$2"
-  local meta_file="$INSTANCES_DIR/$name/metadata.json"
-  [[ -f "$meta_file" ]] && jq -r ".$field // empty" "$meta_file"
-}
-
-# Get SSH key path (handles both field names)
-get_ssh_key() {
-  local name="$1"
-  local key
-  key=$(get_meta "$name" "ssh_key_path")
-  [[ -z "$key" ]] && key=$(get_meta "$name" "ssh_key")
-  echo "$key"
-}
-
-# Get SSH user (default: root)
-get_ssh_user() {
-  local name="$1"
-  local user
-  user=$(get_meta "$name" "ssh_user")
-  echo "${user:-root}"
-}
-
 # =============================================================================
-# Commands
+# Inline commands (too small to warrant their own script)
 # =============================================================================
-
-cmd_list() {
-  "$SCRIPT_DIR/scripts/list.sh"
-}
-
-cmd_status() {
-  local name="${1:?Usage: claw status NAME}"
-  "$SCRIPT_DIR/scripts/status.sh" "$name"
-}
 
 cmd_approve() {
   local name="${1:-}"
   local code="${2:-}"
-  local ip=$(get_meta "$name" "ip")
-  local key=$(get_ssh_key "$name")
-  local user=$(get_ssh_user "$name")
-  local token=$(get_meta "$name" "gateway_token")
 
-  [[ -z "$ip" ]] && { echo "Instance '$name' not found"; exit 1; }
+  load_instance "$name" || exit 1
   [[ -z "$code" ]] && { echo "Usage: claw approve NAME CODE"; exit 1; }
 
   echo -e "${BLUE}Approving pairing code $code on $name...${NC}"
 
-  ssh -i "$key" $SSH_OPTS "${user}@$ip" \
-    "OPENCLAW_GATEWAY_TOKEN=\"${token}\" openclaw pairing approve telegram ${code} 2>&1"
+  ssh -i "$INSTANCE_SSH_KEY" $SSH_OPTS "${INSTANCE_SSH_USER}@$INSTANCE_IP" \
+    "OPENCLAW_GATEWAY_TOKEN=\"${INSTANCE_GATEWAY_TOKEN}\" openclaw pairing approve telegram ${code} 2>&1"
 
-  echo -e "${GREEN}✓ Approved${NC}"
+  echo -e "${GREEN}OK Approved${NC}"
 }
 
 cmd_message() {
   local name="${1:-}"
   local msg="${2:-}"
-  local ip=$(get_meta "$name" "ip")
-  local key=$(get_ssh_key "$name")
-  local user=$(get_ssh_user "$name")
-  local token=$(get_meta "$name" "gateway_token")
 
-  [[ -z "$ip" ]] && { echo "Instance '$name' not found"; exit 1; }
+  load_instance "$name" || exit 1
   [[ -z "$msg" ]] && { echo "Usage: claw message NAME \"text\""; exit 1; }
 
-  # Use heredoc to safely pass the message without injection risk
-  ssh -i "$key" $SSH_OPTS "${user}@$ip" \
-    "OPENCLAW_GATEWAY_TOKEN=\"${token}\" openclaw agent --session-id parent --message \"${msg//\"/\\\"}\" 2>&1"
+  ssh -i "$INSTANCE_SSH_KEY" $SSH_OPTS "${INSTANCE_SSH_USER}@$INSTANCE_IP" \
+    "OPENCLAW_GATEWAY_TOKEN=\"${INSTANCE_GATEWAY_TOKEN}\" openclaw agent --session-id parent --message \"${msg//\"/\\\"}\" 2>&1"
 }
 
 cmd_logs() {
   local name="${1:?Usage: claw logs NAME [-f]}"
   local follow="${2:-}"
-  local ip=$(get_meta "$name" "ip")
-  local key=$(get_ssh_key "$name")
-  local user=$(get_ssh_user "$name")
 
-  [[ -z "$ip" ]] && { echo "Instance '$name' not found"; exit 1; }
+  load_instance "$name" || exit 1
 
   if [[ "$follow" == "-f" ]]; then
-    ssh -i "$key" $SSH_OPTS "${user}@$ip" "journalctl -u openclaw-gateway -f" 2>/dev/null
+    ssh -i "$INSTANCE_SSH_KEY" $SSH_OPTS "${INSTANCE_SSH_USER}@$INSTANCE_IP" \
+      "journalctl -u openclaw-gateway -f" 2>/dev/null
   else
-    ssh -i "$key" $SSH_OPTS "${user}@$ip" "journalctl -u openclaw-gateway --no-pager -n 50" 2>/dev/null
+    ssh -i "$INSTANCE_SSH_KEY" $SSH_OPTS "${INSTANCE_SSH_USER}@$INSTANCE_IP" \
+      "journalctl -u openclaw-gateway --no-pager -n 50" 2>/dev/null
   fi
 }
 
-cmd_restart() {
-  local name="${1:?Usage: claw restart NAME}"
-  "$SCRIPT_DIR/scripts/restart.sh" "$name"
-}
-
 cmd_destroy() {
-  local name="$1"
+  local name="${1:-}"
   [[ -z "$name" ]] && { echo "Usage: claw destroy NAME"; exit 1; }
-  
+
   echo -e "${YELLOW}Destroying $name...${NC}"
   "$SCRIPT_DIR/scripts/destroy.sh" "$name" --confirm
 }
 
 cmd_ssh() {
   local name="${1:?Usage: claw ssh NAME}"
-  local ip=$(get_meta "$name" "ip")
-  local key=$(get_ssh_key "$name")
-  local user=$(get_ssh_user "$name")
 
-  [[ -z "$ip" ]] && { echo "Instance '$name' not found"; exit 1; }
+  load_instance "$name" || exit 1
 
-  echo -e "${CYAN}Connecting to $name ($ip) as ${user}...${NC}"
-  ssh -i "$key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "${user}@$ip"
+  echo -e "${CYAN}Connecting to $name ($INSTANCE_IP) as ${INSTANCE_SSH_USER}...${NC}"
+  ssh -i "$INSTANCE_SSH_KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    "${INSTANCE_SSH_USER}@$INSTANCE_IP"
 }
 
 cmd_shell() {
   local name="${1:?Usage: claw shell NAME}"
-  local ip=$(get_meta "$name" "ip")
-  local key=$(get_ssh_key "$name")
-  local user=$(get_ssh_user "$name")
 
-  [[ -z "$ip" ]] && { echo "Instance '$name' not found"; exit 1; }
+  load_instance "$name" || exit 1
 
   # Read Anthropic key from credentials or environment
   local credentials_file="$INSTANCES_DIR/credentials.json"
@@ -186,347 +133,22 @@ cmd_shell() {
     exit 1
   fi
 
-  echo -e "${CYAN}Opening Claude Code shell on $name ($ip)...${NC}"
+  echo -e "${CYAN}Opening Claude Code shell on $name ($INSTANCE_IP)...${NC}"
 
   # Detect workspace directory on VM, default to home
   local workspace
-  workspace=$(ssh -i "$key" $SSH_OPTS "${user}@$ip" \
+  workspace=$(ssh -i "$INSTANCE_SSH_KEY" $SSH_OPTS "${INSTANCE_SSH_USER}@$INSTANCE_IP" \
     "ls -d ~/.openclaw 2>/dev/null && echo ~/.openclaw || echo ~" 2>/dev/null)
   workspace=$(echo "$workspace" | tail -1 | tr -d '[:space:]')
 
   # SSH with TTY, set Anthropic key, cd to workspace, exec interactive Claude Code
-  ssh -t -i "$key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-    "${user}@$ip" "cd ${workspace} && ANTHROPIC_API_KEY='${anthropic_key}' claude --dangerously-skip-permissions"
-}
-
-cmd_diagnose() {
-  local name="${1:?Usage: claw diagnose NAME}"
-
-  # ---- Self-diagnosis: run proactive-amcp diagnose locally ----
-  if [[ "$name" == "self" ]]; then
-    echo -e "${BLUE}Running local self-diagnosis...${NC}" >&2
-    proactive-amcp diagnose --json
-    return
-  fi
-
-  # ---- Remote diagnosis: delegate to proactive-amcp diagnose on child ----
-  local ip=$(get_meta "$name" "ip")
-  local key=$(get_ssh_key "$name")
-  local user=$(get_ssh_user "$name")
-
-  [[ -z "$ip" ]] && { echo "Instance '$name' not found"; exit 1; }
-
-  local ssh_base="ssh -i $key $SSH_OPTS"
-
-  echo -e "${BLUE}Diagnosing $name ($ip)...${NC}" >&2
-
-  # Read Anthropic key from credentials or environment (passed to child if not in its config)
-  local credentials_file="$INSTANCES_DIR/credentials.json"
-  local anthropic_key=""
-  if [[ -f "$credentials_file" ]]; then
-    anthropic_key=$(jq -r '.anthropic_api_key // empty' "$credentials_file")
-  fi
-  if [[ -z "$anthropic_key" ]]; then
-    anthropic_key="${ANTHROPIC_API_KEY:-}"
-  fi
-
-  echo -e "${BLUE}Running proactive-amcp diagnose on $name...${NC}" >&2
-
-  # Run proactive-amcp diagnose on the child VM
-  # The child has ANTHROPIC_API_KEY and SOLVR_API_KEY in its ~/.amcp/config.json
-  # Pass anthropic key from parent as fallback (child config takes precedence in the script)
-  local result
-  if [[ -n "$anthropic_key" ]]; then
-    result=$($ssh_base "${user}@$ip" \
-      "ANTHROPIC_API_KEY='${anthropic_key}' proactive-amcp diagnose --json" 2>/dev/null) || true
-  else
-    result=$($ssh_base "${user}@$ip" \
-      "proactive-amcp diagnose --json" 2>/dev/null) || true
-  fi
-
-  # Strip any TTY artifacts
-  result=$(echo "$result" | tr -d '\r' | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g')
-
-  # Extract JSON from output
-  local json_output
-  json_output=$(echo "$result" | python3 -c "
-import sys, json
-text = sys.stdin.read()
-depth = 0
-start = -1
-for i, c in enumerate(text):
-    if c == '{':
-        if depth == 0:
-            start = i
-        depth += 1
-    elif c == '}':
-        depth -= 1
-        if depth == 0 and start >= 0:
-            candidate = text[start:i+1]
-            try:
-                obj = json.loads(candidate)
-                print(json.dumps(obj))
-                sys.exit(0)
-            except json.JSONDecodeError:
-                start = -1
-print('')
-" 2>/dev/null)
-
-  if [[ -n "$json_output" ]] && echo "$json_output" | jq . >/dev/null 2>&1; then
-    echo "$json_output" | jq .
-  else
-    echo -e "${YELLOW}Warning: Could not parse JSON from proactive-amcp diagnose output${NC}" >&2
-    jq -n \
-      --arg instance "$name" \
-      --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-      --arg raw_output "$result" \
-      '{
-        instance: $instance,
-        timestamp: $timestamp,
-        checks_passed: 0,
-        checks_failed: 0,
-        checks: {},
-        errors: ["diagnose output was not valid JSON — see raw_output"],
-        solvr_matches: [],
-        solvr_posts: [],
-        raw_output: $raw_output
-      }'
-  fi
-}
-
-cmd_fix() {
-  local name="${1:?Usage: claw fix NAME}"
-  local ip=$(get_meta "$name" "ip")
-  local key=$(get_ssh_key "$name")
-  local user=$(get_ssh_user "$name")
-
-  [[ -z "$ip" ]] && { echo "Instance '$name' not found"; exit 1; }
-
-  local ssh_base="ssh -i $key $SSH_OPTS"
-
-  # Step 1: Run diagnose internally
-  echo -e "${BLUE}Step 1: Running diagnosis on $name...${NC}" >&2
-  local diagnose_output
-  diagnose_output=$(cmd_diagnose "$name" 2>/dev/null)
-
-  if [[ -z "$diagnose_output" ]] || ! echo "$diagnose_output" | jq . >/dev/null 2>&1; then
-    echo -e "${RED}Diagnosis failed — cannot proceed with fix${NC}" >&2
-    exit 1
-  fi
-
-  # Check if there are any errors to fix
-  local error_count
-  error_count=$(echo "$diagnose_output" | jq '.checks_failed // 0')
-  if [[ "$error_count" -eq 0 ]]; then
-    echo -e "${GREEN}No issues found — $name is healthy${NC}" >&2
-    echo "$diagnose_output"
-    return 0
-  fi
-
-  echo -e "${YELLOW}Found $error_count issue(s) — attempting fixes...${NC}" >&2
-
-  # Step 2: Gather credentials
-  local solvr_key
-  solvr_key=$($ssh_base "${user}@$ip" \
-    "proactive-amcp config get solvr_api_key 2>/dev/null || echo ''" 2>/dev/null)
-  solvr_key=$(echo "$solvr_key" | tr -d '[:space:]')
-
-  local credentials_file="$INSTANCES_DIR/credentials.json"
-  local anthropic_key=""
-  if [[ -f "$credentials_file" ]]; then
-    anthropic_key=$(jq -r '.anthropic_api_key // empty' "$credentials_file")
-  fi
-  if [[ -z "$anthropic_key" ]]; then
-    anthropic_key="${ANTHROPIC_API_KEY:-}"
-  fi
-  if [[ -z "$anthropic_key" ]]; then
-    echo -e "${RED}No ANTHROPIC_API_KEY found in credentials or environment${NC}" >&2
-    exit 1
-  fi
-
-  # Read parent notification config from metadata
-  local meta_file="$INSTANCES_DIR/$name/metadata.json"
-  local parent_telegram_token parent_chat_id parent_email
-  parent_telegram_token=$(jq -r '.parent_telegram_token // empty' "$meta_file" 2>/dev/null)
-  parent_chat_id=$(jq -r '.parent_chat_id // empty' "$meta_file" 2>/dev/null)
-  parent_email=$(jq -r '.parent_email // empty' "$meta_file" 2>/dev/null)
-
-  # Step 3: Load fix prompt template
-  local template_file="$SCRIPT_DIR/templates/fix-prompt.md"
-  if [[ ! -f "$template_file" ]]; then
-    echo -e "${RED}Template not found: $template_file${NC}" >&2
-    exit 1
-  fi
-
-  # Step 4: Build Solvr fix section
-  local solvr_fix_file
-  solvr_fix_file=$(mktemp /tmp/claw-solvr-fix-XXXXXX.txt)
-  if [[ -n "$solvr_key" && "$solvr_key" != "null" ]]; then
-    cat > "$solvr_fix_file" << SOLVREOF
-Search Solvr for existing solutions:
-\`\`\`bash
-curl -s -H "Authorization: Bearer ${solvr_key}" -G --data-urlencode "q=<error description>" "https://api.solvr.dev/v1/problems/search"
-\`\`\`
-
-If a matching approach exists, apply its method. After applying, update the approach status:
-\`\`\`bash
-# Mark as "worked" or "failed"
-curl -s -X PATCH "https://api.solvr.dev/v1/approaches/<approach_id>" -H "Authorization: Bearer ${solvr_key}" -H "Content-Type: application/json" -d '{"status": "worked"}'
-\`\`\`
-
-If NO match found, post a new problem:
-\`\`\`bash
-curl -s -X POST "https://api.solvr.dev/v1/problems" -H "Authorization: Bearer ${solvr_key}" -H "Content-Type: application/json" -d '{"title": "<short title>", "description": "<error details>", "tags": ["openclaw", "gateway", "auto-fix"]}'
-\`\`\`
-
-After attempting a fix, add an approach to the problem:
-\`\`\`bash
-curl -s -X POST "https://api.solvr.dev/v1/problems/<problem_id>/approaches" -H "Authorization: Bearer ${solvr_key}" -H "Content-Type: application/json" -d '{"angle": "<what you tried>", "method": "<exact commands>", "status": "worked|failed"}'
-\`\`\`
-SOLVREOF
-  else
-    echo "No Solvr API key available. Skip all Solvr operations. Set solvr_problem_id and solvr_approach_id to null in output." > "$solvr_fix_file"
-  fi
-
-  # Step 5: Build escalation section
-  local escalation_file
-  escalation_file=$(mktemp /tmp/claw-escalation-XXXXXX.txt)
-  local has_escalation=false
-  if [[ -n "$parent_telegram_token" && -n "$parent_chat_id" ]]; then
-    has_escalation=true
-    cat > "$escalation_file" << ESCEOF
-Send Telegram notification to parent:
-\`\`\`bash
-curl -s -X POST "https://api.telegram.org/bot${parent_telegram_token}/sendMessage" -H "Content-Type: application/json" -d "{\"chat_id\": \"${parent_chat_id}\", \"text\": \"ALERT: Instance ${name} has issues that could not be auto-fixed after 3 attempts.\n\nErrors:\n<list each escalated error>\n\nApproaches tried:\n<list each failed approach>\n\nPlease investigate manually: claw ssh ${name}\", \"parse_mode\": \"HTML\"}"
-\`\`\`
-ESCEOF
-  else
-    echo "No parent Telegram credentials configured. Set telegram_sent to false in escalation output." > "$escalation_file"
-  fi
-
-  if [[ -n "$parent_email" ]]; then
-    cat >> "$escalation_file" << EMAILEOF
-
-Send email notification (if mail command available):
-\`\`\`bash
-echo "ALERT: Instance ${name} has issues that could not be auto-fixed. Please investigate: claw ssh ${name}" | mail -s "OpenClaw Alert: ${name} needs attention" "${parent_email}" 2>/dev/null || true
-\`\`\`
-EMAILEOF
-  else
-    echo "No parent email configured. Set email_sent to false in escalation output." >> "$escalation_file"
-  fi
-
-  # Step 6: Build final prompt with all placeholders replaced
-  local prompt_tmp
-  prompt_tmp=$(mktemp /tmp/claw-fix-XXXXXX.md)
-  trap "rm -f '$prompt_tmp' '$solvr_fix_file' '$escalation_file'" RETURN
-
-  # Escape diagnose JSON for awk insertion
-  local diagnose_file
-  diagnose_file=$(mktemp /tmp/claw-diagnose-out-XXXXXX.json)
-  echo "$diagnose_output" > "$diagnose_file"
-
-  awk -v name="$name" \
-      -v diagnose_f="$diagnose_file" \
-      -v solvr_f="$solvr_fix_file" \
-      -v esc_f="$escalation_file" '
-    { gsub(/\{\{INSTANCE_NAME\}\}/, name) }
-    /\{\{DIAGNOSE_OUTPUT\}\}/ { while ((getline line < diagnose_f) > 0) print line; next }
-    /\{\{SOLVR_FIX_SECTION\}\}/ { while ((getline line < solvr_f) > 0) print line; next }
-    /\{\{ESCALATION_SECTION\}\}/ { while ((getline line < esc_f) > 0) print line; next }
-    { print }
-  ' "$template_file" > "$prompt_tmp"
-  rm -f "$diagnose_file" "$solvr_fix_file" "$escalation_file"
-
-  # Step 7: Upload prompt to VM and run Claude Code
-  local remote_prompt="/tmp/claw-fix-prompt.md"
-  scp -i "$key" $SSH_OPTS \
-    "$prompt_tmp" "${user}@${ip}:${remote_prompt}" 2>/dev/null
-
-  echo -e "${BLUE}Step 2: Running Claude Code fix session on $name...${NC}" >&2
-
-  local result
-  result=$($ssh_base -t "${user}@$ip" \
-    "ANTHROPIC_API_KEY='${anthropic_key}' claude --print \"\$(cat ${remote_prompt})\" ; rm -f ${remote_prompt}" 2>/dev/null)
-
-  # Strip TTY control characters
-  result=$(echo "$result" | tr -d '\r' | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g')
-
-  # Extract JSON from output
-  local json_output
-  json_output=$(echo "$result" | python3 -c "
-import sys, json
-text = sys.stdin.read()
-depth = 0
-start = -1
-for i, c in enumerate(text):
-    if c == '{':
-        if depth == 0:
-            start = i
-        depth += 1
-    elif c == '}':
-        depth -= 1
-        if depth == 0 and start >= 0:
-            candidate = text[start:i+1]
-            try:
-                obj = json.loads(candidate)
-                print(json.dumps(obj))
-                sys.exit(0)
-            except json.JSONDecodeError:
-                start = -1
-print('')
-" 2>/dev/null)
-
-  # Step 8: Process result and handle escalation/notification
-  if [[ -n "$json_output" ]] && echo "$json_output" | jq . >/dev/null 2>&1; then
-    local fixed_count escalated_count
-    fixed_count=$(echo "$json_output" | jq '.fixed // 0')
-    escalated_count=$(echo "$json_output" | jq '.escalated // 0')
-
-    # Send calm summary to parent on success (if all fixed, no escalations)
-    if [[ "$escalated_count" -eq 0 && "$fixed_count" -gt 0 && -n "$parent_telegram_token" && -n "$parent_chat_id" ]]; then
-      local summary_msg="Instance ${name}: auto-fixed ${fixed_count} issue(s). All checks passing now."
-      curl -s -X POST "https://api.telegram.org/bot${parent_telegram_token}/sendMessage" \
-        -H "Content-Type: application/json" \
-        -d "$(jq -n --arg chat_id "$parent_chat_id" --arg text "$summary_msg" '{chat_id: $chat_id, text: $text}')" \
-        >/dev/null 2>&1 || true
-      echo -e "${GREEN}Sent fix summary to parent Telegram${NC}" >&2
-    fi
-
-    if [[ "$escalated_count" -gt 0 ]]; then
-      echo -e "${RED}$escalated_count issue(s) could not be auto-fixed and were escalated${NC}" >&2
-    fi
-    if [[ "$fixed_count" -gt 0 ]]; then
-      echo -e "${GREEN}$fixed_count issue(s) successfully fixed${NC}" >&2
-    fi
-
-    echo "$json_output" | jq .
-  else
-    echo -e "${YELLOW}Warning: Could not parse JSON from Claude Code fix output${NC}" >&2
-    jq -n \
-      --arg instance "$name" \
-      --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-      --arg raw_output "$result" \
-      '{
-        instance: $instance,
-        timestamp: $timestamp,
-        total_errors: 0,
-        fixed: 0,
-        failed: 0,
-        escalated: 0,
-        fixes: [],
-        escalations: [],
-        raw_output: $raw_output
-      }'
-  fi
-}
-
-cmd_deploy() {
-  "$SCRIPT_DIR/deploy.sh" "$@"
+  ssh -t -i "$INSTANCE_SSH_KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    "${INSTANCE_SSH_USER}@$INSTANCE_IP" \
+    "cd ${workspace} && ANTHROPIC_API_KEY='${anthropic_key}' claude --dangerously-skip-permissions"
 }
 
 # =============================================================================
-# Main
+# Main dispatcher
 # =============================================================================
 
 [[ $# -lt 1 ]] && usage
@@ -535,20 +157,23 @@ cmd="$1"
 shift
 
 case "$cmd" in
-  deploy)   cmd_deploy "$@" ;;
-  import)   "$SCRIPT_DIR/scripts/import.sh" "$@" ;;
-  list)     cmd_list ;;
-  status)   cmd_status "$@" ;;
-  diagnose) cmd_diagnose "$@" ;;
-  fix)      cmd_fix "$@" ;;
-  approve)  cmd_approve "$@" ;;
-  message)  cmd_message "$@" ;;
-  logs)     cmd_logs "$@" ;;
-  restart)  cmd_restart "$@" ;;
-  destroy)  cmd_destroy "$@" ;;
-  upgrade)  "$SCRIPT_DIR/scripts/upgrade.sh" "$@" ;;
-  shell)    cmd_shell "$@" ;;
-  ssh)      cmd_ssh "$@" ;;
-  help)     usage ;;
-  *)        echo "Unknown command: $cmd"; usage ;;
+  deploy)      "$SCRIPT_DIR/deploy.sh" "$@" ;;
+  import)      "$SCRIPT_DIR/scripts/import.sh" "$@" ;;
+  list)        "$SCRIPT_DIR/scripts/list.sh" ;;
+  status)      "$SCRIPT_DIR/scripts/status.sh" "$@" ;;
+  diagnose)    "$SCRIPT_DIR/scripts/diagnose-remote.sh" "$@" ;;
+  fix)         "$SCRIPT_DIR/scripts/fix-remote.sh" "$@" ;;
+  approve)     cmd_approve "$@" ;;
+  message)     cmd_message "$@" ;;
+  logs)        cmd_logs "$@" ;;
+  restart)     "$SCRIPT_DIR/scripts/restart.sh" "$@" ;;
+  destroy)     cmd_destroy "$@" ;;
+  upgrade)     "$SCRIPT_DIR/scripts/upgrade.sh" "$@" ;;
+  setup-amcp)  "$SCRIPT_DIR/scripts/setup-amcp.sh" "$@" ;;
+  config)      "$SCRIPT_DIR/scripts/remote-config.sh" "$@" ;;
+  checkpoint)  "$SCRIPT_DIR/scripts/remote-checkpoint.sh" "$@" ;;
+  shell)       cmd_shell "$@" ;;
+  ssh)         cmd_ssh "$@" ;;
+  help)        usage ;;
+  *)           echo "Unknown command: $cmd"; usage ;;
 esac

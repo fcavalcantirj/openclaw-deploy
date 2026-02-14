@@ -1,6 +1,6 @@
 ---
 name: openclaw-deploy
-version: 1.2.0
+version: 1.3.0
 description: "Fleet management for OpenClaw Gateway instances on Hetzner Cloud. Provisions, monitors, diagnoses, and self-heals child instances with dedicated Telegram bots. Use when deploying instances, managing fleet, diagnosing issues, onboarding users, or checking fleet health."
 triggers:
   - deploy
@@ -58,6 +58,9 @@ Match the user's intent to the right command. All commands use `SKILL_DIR/claw`.
 | Run health diagnostics | `claw diagnose` | `SKILL_DIR/claw diagnose alice` or `claw diagnose self` |
 | Auto-fix issues | `claw fix` | `SKILL_DIR/claw fix alice` |
 | Upgrade tool stack | `claw upgrade` | `SKILL_DIR/claw upgrade alice --dry-run` |
+| Bootstrap AMCP on child | `claw setup-amcp` | `SKILL_DIR/claw setup-amcp alice` |
+| View/set AMCP config | `claw config` | `SKILL_DIR/claw config alice --show` |
+| Run checkpoint on child | `claw checkpoint` | `SKILL_DIR/claw checkpoint alice --full` |
 | Interactive Claude Code | `claw shell` | `SKILL_DIR/claw shell alice` |
 | Direct SSH access | `claw ssh` | `SKILL_DIR/claw ssh alice` |
 
@@ -70,8 +73,11 @@ When the user says "deploy" or "new instance": confirm they have a bot token, th
 - `claw fix` — modifies child VM state, explain what diagnose found and get approval before running fix
 - `claw deploy` — provisions infrastructure and incurs cost, confirm name/region/token before executing
 - `claw shell` — opens an elevated session on a child VM, only run when the user explicitly requests it
+- `claw setup-amcp` — installs software and creates identity on child VM, explain what will happen before running
+- `claw config --set/--push` — modifies child config, confirm key/value before running
+- `claw checkpoint` — triggers checkpoint on child, safe but uses compute resources
 
-Read-only commands (`list`, `status`, `diagnose`, `logs`) are safe to run without confirmation.
+Read-only commands (`list`, `status`, `diagnose`, `logs`, `config --show`) are safe to run without confirmation.
 
 ---
 
@@ -95,7 +101,7 @@ SKILL_DIR/claw list
 # Check one instance
 SKILL_DIR/claw status NAME
 
-# Diagnose issues (runs 7 health checks + Solvr search)
+# Diagnose issues (14 checks: connectivity, auth, AMCP, system)
 SKILL_DIR/claw diagnose NAME
 ```
 
@@ -110,6 +116,26 @@ SKILL_DIR/claw fix NAME
 ```
 
 `claw fix` runs Claude Code on the child VM with a fix prompt. It searches Solvr for known solutions first. If fixes fail 3 times, it escalates to parent via Telegram and email.
+
+### AMCP Management
+
+```bash
+# Bootstrap AMCP on a child (identity, config, watchdog, first checkpoint)
+SKILL_DIR/claw setup-amcp NAME
+
+# View child AMCP config (secrets masked)
+SKILL_DIR/claw config NAME --show
+
+# Set a single config key
+SKILL_DIR/claw config NAME --set pinata_jwt=eyJ...
+
+# Push all keys from parent credentials.json
+SKILL_DIR/claw config NAME --push
+
+# Trigger a checkpoint
+SKILL_DIR/claw checkpoint NAME
+SKILL_DIR/claw checkpoint NAME --full
+```
 
 ### Onboard a User
 
@@ -229,7 +255,7 @@ No external service is contacted during read-only commands (`claw list`, `claw s
 
 For detailed documentation:
 
-- **All 14 commands with flags and examples**: `SKILL_DIR/references/commands.md`
+- **All 17 commands with flags and examples**: `SKILL_DIR/references/commands.md`
 - **Prerequisites, architecture, deploy flow**: `SKILL_DIR/references/deployment.md`
 - **Common issues, recovery, security model**: `SKILL_DIR/references/troubleshooting.md`
 
