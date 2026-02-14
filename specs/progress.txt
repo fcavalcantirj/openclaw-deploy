@@ -23,3 +23,10 @@
 - Extracts AID from `amcp identity validate --json` for logging
 - grep confirms zero sha256sum calls remain in scripts/
 - bash -n syntax check passes, file still at 541 lines
+
+## 2026-02-14: Replace embedded watchdog with 'proactive-amcp install --watchdog-interval'
+- Removed ~120 lines of embedded watchdog script from Step 9 of master-setup.sh
+- Removed embedded cron setup for watchdog
+- Replaced with: `proactive-amcp install --watchdog-interval 120` with service/port/notify flags
+- Verifies watchdog is active via systemd timer or cron file check
+- bash -n syntax check passes, file reduced from 541 to 432 lines

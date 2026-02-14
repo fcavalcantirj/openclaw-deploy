@@ -266,130 +266,21 @@ AUTHEOF
   # -------------------------------------------------------------------------
   notify "Setting up watchdog..."
 
-  cat > /usr/local/bin/openclaw-watchdog << 'WATCHDOGEOF'
-#!/usr/bin/env bash
-# OpenClaw Self-Healing Watchdog (proactive-amcp pattern)
-# Checks: gateway process, port 18789, disk, memory
-# On failure: increments death count, attempts restart, notifies parent
-set -euo pipefail
+  # Delegate to proactive-amcp: installs watchdog script, systemd/cron, and self-healing logic
+  proactive-amcp install --watchdog-interval 120 \
+    --service openclaw-gateway \
+    --port 18789 \
+    --amcp-dir "$AMCP_DIR" \
+    --notify-token "$PARENT_BOT_TOKEN" \
+    --notify-chat "$PARENT_CHAT_ID" \
+    || fail "proactive-amcp watchdog install failed"
 
-AMCP_FILE="/home/openclaw/.amcp/identity.json"
-LOG="/var/log/openclaw-watchdog.log"
-FAIL_THRESHOLD=2
-STATE_FILE="/home/openclaw/.amcp/watchdog-state.json"
-
-log() { echo "[$(date -u '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG"; }
-
-# Initialize state file if missing
-if [[ ! -f "$STATE_FILE" ]]; then
-  echo '{"consecutive_failures":0,"state":"HEALTHY"}' > "$STATE_FILE"
-  chown openclaw:openclaw "$STATE_FILE"
-fi
-
-FAILURES=$(jq -r '.consecutive_failures // 0' "$STATE_FILE")
-errors=()
-
-# Check 1: Gateway service
-if ! systemctl is-active --quiet openclaw-gateway; then
-  errors+=("gateway_down")
-fi
-
-# Check 2: Port 18789 responding (only if service is active)
-if [[ ${#errors[@]} -eq 0 ]]; then
-  if ! curl -s --max-time 5 http://127.0.0.1:18789/health >/dev/null 2>&1; then
-    errors+=("port_unresponsive")
-  fi
-fi
-
-# Check 3: Disk space (>90% = critical)
-DISK_USAGE=$(df -h / | awk 'NR==2 {gsub(/%/,""); print $5}')
-if [[ "$DISK_USAGE" -gt 90 ]] 2>/dev/null; then
-  errors+=("disk_critical:${DISK_USAGE}%")
-  # Auto-cleanup old logs
-  journalctl --vacuum-time=3d >/dev/null 2>&1 || true
-fi
-
-# Check 4: Memory (<200MB available = critical)
-MEM_AVAIL=$(free -m | awk '/Mem:/ {print $7}')
-if [[ "$MEM_AVAIL" -lt 200 ]] 2>/dev/null; then
-  errors+=("memory_low:${MEM_AVAIL}MB")
-fi
-
-if [[ ${#errors[@]} -eq 0 ]]; then
-  # Healthy
-  if [[ "$FAILURES" -gt 0 ]]; then
-    log "Recovered after $FAILURES failures"
-  fi
-  echo '{"consecutive_failures":0,"state":"HEALTHY","last_check":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$STATE_FILE"
-  exit 0
-fi
-
-# Failed — increment counter
-FAILURES=$((FAILURES + 1))
-log "Health check failed ($FAILURES/$FAIL_THRESHOLD): ${errors[*]}"
-
-if [[ "$FAILURES" -ge "$FAIL_THRESHOLD" ]]; then
-  log "Threshold reached — attempting resurrection..."
-
-  # Increment death count in AMCP identity
-  if [[ -f "$AMCP_FILE" ]]; then
-    DEATHS=$(jq -r '.deaths // 0' "$AMCP_FILE")
-    DEATHS=$((DEATHS + 1))
-    jq ".deaths = $DEATHS | .last_death = \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"" \
-      "$AMCP_FILE" > "${AMCP_FILE}.tmp" && mv "${AMCP_FILE}.tmp" "$AMCP_FILE"
-    chown openclaw:openclaw "$AMCP_FILE"
-  fi
-
-  # Stage 1: Restart gateway
-  systemctl restart openclaw-gateway 2>/dev/null || true
-  sleep 5
-
-  if systemctl is-active --quiet openclaw-gateway; then
-    log "Resurrected via restart (Death #${DEATHS:-?})"
-
-    # Notify parent
-    if [[ -f "$AMCP_FILE" ]]; then
-      PARENT_TOKEN=$(jq -r '.parent_bot_token // empty' "$AMCP_FILE")
-      PARENT_CHAT=$(jq -r '.parent_chat_id // empty' "$AMCP_FILE")
-      INSTANCE=$(jq -r '.instance' "$AMCP_FILE")
-      if [[ -n "$PARENT_TOKEN" && -n "$PARENT_CHAT" ]]; then
-        curl -s --connect-timeout 5 --max-time 10 \
-          -X POST "https://api.telegram.org/bot${PARENT_TOKEN}/sendMessage" \
-          -d "chat_id=${PARENT_CHAT}" \
-          -d "text=☠️ <b>${INSTANCE}</b> Death #${DEATHS:-?} — Resurrected! Errors: ${errors[*]}" \
-          -d "parse_mode=HTML" >/dev/null 2>&1 || true
-      fi
-    fi
-    echo '{"consecutive_failures":0,"state":"RECOVERED","last_check":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$STATE_FILE"
+  # Verify watchdog is active
+  if systemctl is-active --quiet proactive-amcp-watchdog.timer 2>/dev/null || [[ -f /etc/cron.d/proactive-amcp-watchdog ]]; then
+    log "Watchdog installed (interval: 120s)"
   else
-    # Stage 2: Try restoring config from backup
-    BACKUP=$(ls -1t /home/openclaw/.amcp/config-backups/openclaw-*.json 2>/dev/null | head -1)
-    if [[ -n "$BACKUP" ]] && jq . "$BACKUP" >/dev/null 2>&1; then
-      log "Restoring config from backup: $BACKUP"
-      cp /home/openclaw/.openclaw/openclaw.json /home/openclaw/.openclaw/openclaw.json.pre-recovery 2>/dev/null || true
-      cp "$BACKUP" /home/openclaw/.openclaw/openclaw.json
-      chown openclaw:openclaw /home/openclaw/.openclaw/openclaw.json
-      systemctl restart openclaw-gateway 2>/dev/null || true
-      sleep 5
-    fi
-
-    if systemctl is-active --quiet openclaw-gateway; then
-      log "Resurrected via config restore (Death #${DEATHS:-?})"
-      echo '{"consecutive_failures":0,"state":"RECOVERED","last_check":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$STATE_FILE"
-    else
-      log "Resurrection FAILED — human intervention required"
-      echo '{"consecutive_failures":'"$FAILURES"',"state":"DEAD","last_check":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$STATE_FILE"
-    fi
+    log "Warning: watchdog installed but timer/cron not detected — proactive-amcp may use different scheduling"
   fi
-else
-  echo '{"consecutive_failures":'"$FAILURES"',"state":"CHECKING","last_check":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}' > "$STATE_FILE"
-fi
-WATCHDOGEOF
-  chmod +x /usr/local/bin/openclaw-watchdog
-
-  # Watchdog cron (every 2 minutes)
-  echo "*/2 * * * * root /usr/local/bin/openclaw-watchdog" > /etc/cron.d/openclaw-watchdog
-  chmod 644 /etc/cron.d/openclaw-watchdog
 
   # -------------------------------------------------------------------------
   # Step 10: Create AMCP checkpoint script

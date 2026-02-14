@@ -101,7 +101,7 @@
       "Replace with: proactive-amcp install --watchdog-interval 120",
       "Verify watchdog service is running: systemctl status proactive-amcp-watchdog"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "integration",
