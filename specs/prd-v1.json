@@ -134,7 +134,7 @@
       "Replace each mutation with appropriate amcp CLI or proactive-amcp command",
       "Verify: grep -r 'identity.json' scripts/ returns only reads, zero writes"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "integration",

@@ -44,3 +44,10 @@
 - All stored in ~/.amcp/config.json via proactive-amcp (not in identity.json)
 - Each call is non-fatal (|| log warning) to avoid blocking deploy on config issues
 - bash -n syntax check passes, file at 389 lines
+
+## 2026-02-14: Remove ALL direct identity.json mutations
+- Audited all files: scripts/, prompts/, claw CLI
+- Zero jq writes to identity.json remain (watchdog writes removed in watchdog task, checkpoint writes removed in checkpoint task)
+- scripts/master-setup.sh: identity.json references are only amcp CLI calls (create, validate)
+- claw CLI line 120: read-only jq query (will be updated in next task to use amcp identity validate)
+- grep confirms zero write mutations to identity.json in scripts/
