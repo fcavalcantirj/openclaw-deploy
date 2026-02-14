@@ -186,7 +186,7 @@ main() {
   AMCP_IDENTITY="$AMCP_DIR/identity.json"
 
   # Create real KERI identity via amcp CLI (idempotent — skip if valid identity exists)
-  if [[ -f "$AMCP_IDENTITY" ]] && amcp identity validate --file "$AMCP_IDENTITY" >/dev/null 2>&1; then
+  if [[ -f "$AMCP_IDENTITY" ]] && amcp identity validate --path "$AMCP_IDENTITY" >/dev/null 2>&1; then
     log "AMCP identity already exists and is valid — skipping creation"
   else
     amcp identity create --seed "${AMCP_SEED}" --instance "${INSTANCE_NAME}" --out "$AMCP_IDENTITY" \
@@ -194,12 +194,12 @@ main() {
   fi
 
   # Validate the identity is proper KERI
-  if ! amcp identity validate --file "$AMCP_IDENTITY"; then
+  if ! amcp identity validate --path "$AMCP_IDENTITY"; then
     fail "AMCP identity validation failed — identity.json is not valid KERI"
   fi
 
   chown -R openclaw:openclaw "$AMCP_DIR"
-  AMCP_AID=$(amcp identity validate --file "$AMCP_IDENTITY" --json 2>/dev/null | jq -r '.aid // empty')
+  AMCP_AID=$(amcp identity validate --path "$AMCP_IDENTITY" --json 2>/dev/null | jq -r '.aid // empty')
   log "AMCP AID: ${AMCP_AID:0:20}..."
 
   # Store secrets in proactive-amcp config (NOT in identity.json)
