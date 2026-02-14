@@ -214,7 +214,7 @@
       "SSH to instance with -t, detect workspace directory, exec claude --dangerously-skip-permissions",
       "Verify: claw shell <instance> opens interactive Claude Code with workspace access"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "template",

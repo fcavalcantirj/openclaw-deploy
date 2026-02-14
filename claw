@@ -34,6 +34,7 @@ ${BOLD}Commands:${NC}
   ${GREEN}destroy${NC} NAME                           Destroy child instance
   ${GREEN}diagnose${NC} NAME                           Run health checks + Solvr search
   ${GREEN}fix${NC} NAME                               Fix issues via Solvr, escalate after 3 failures
+  ${GREEN}shell${NC} NAME                              Interactive Claude Code on child
   ${GREEN}ssh${NC} NAME                               SSH into child (for debugging)
 
 ${BOLD}Examples:${NC}
@@ -42,6 +43,7 @@ ${BOLD}Examples:${NC}
   claw approve bruce 3R7YX6KS
   claw diagnose bruce
   claw fix bruce
+  claw shell bruce
   claw message bruce "Hello from parent!"
   claw logs bruce -f
   claw destroy bruce
@@ -204,11 +206,45 @@ cmd_ssh() {
   local name="${1:?Usage: claw ssh NAME}"
   local ip=$(get_meta "$name" "ip")
   local key=$(get_meta "$name" "ssh_key_path")
-  
+
   [[ -z "$ip" ]] && { echo "Instance '$name' not found"; exit 1; }
-  
+
   echo -e "${CYAN}Connecting to $name ($ip)...${NC}"
   ssh -i "$key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "openclaw@$ip"
+}
+
+cmd_shell() {
+  local name="${1:?Usage: claw shell NAME}"
+  local ip=$(get_meta "$name" "ip")
+  local key=$(get_meta "$name" "ssh_key_path")
+
+  [[ -z "$ip" ]] && { echo "Instance '$name' not found"; exit 1; }
+
+  # Read Anthropic key from credentials or environment
+  local credentials_file="$INSTANCES_DIR/credentials.json"
+  local anthropic_key=""
+  if [[ -f "$credentials_file" ]]; then
+    anthropic_key=$(jq -r '.anthropic_api_key // empty' "$credentials_file")
+  fi
+  if [[ -z "$anthropic_key" ]]; then
+    anthropic_key="${ANTHROPIC_API_KEY:-}"
+  fi
+  if [[ -z "$anthropic_key" ]]; then
+    echo -e "${RED}No ANTHROPIC_API_KEY found in credentials or environment${NC}"
+    exit 1
+  fi
+
+  echo -e "${CYAN}Opening Claude Code shell on $name ($ip)...${NC}"
+
+  # Detect workspace directory on VM, default to openclaw home
+  local workspace
+  workspace=$(ssh -i "$key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+    "root@$ip" "ls -d /home/openclaw/.openclaw 2>/dev/null && echo /home/openclaw/.openclaw || echo /home/openclaw" 2>/dev/null)
+  workspace=$(echo "$workspace" | tail -1 | tr -d '[:space:]')
+
+  # SSH with TTY, set Anthropic key, cd to workspace, exec interactive Claude Code
+  ssh -t -i "$key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    "root@$ip" "cd ${workspace} && ANTHROPIC_API_KEY='${anthropic_key}' claude --dangerously-skip-permissions"
 }
 
 cmd_diagnose() {
@@ -594,6 +630,7 @@ case "$cmd" in
   logs)     cmd_logs "$@" ;;
   restart)  cmd_restart "$@" ;;
   destroy)  cmd_destroy "$@" ;;
+  shell)    cmd_shell "$@" ;;
   ssh)      cmd_ssh "$@" ;;
   help)     usage ;;
   *)        echo "Unknown command: $cmd"; usage ;;

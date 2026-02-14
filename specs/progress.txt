@@ -148,3 +148,11 @@
 - On escalation: Claude Code sends Telegram alert with error details and approaches tried
 - Added to usage, examples, and case dispatch
 - claw CLI: 600 lines (under 800 limit), bash -n syntax check passes
+
+## 2026-02-14: Add 'claw shell' command to CLI
+- Added cmd_shell to claw CLI — interactive Claude Code session on child instance
+- Reads Anthropic key from credentials.json or ANTHROPIC_API_KEY env var
+- Detects workspace directory on VM: prefers /home/openclaw/.openclaw, falls back to /home/openclaw
+- SSHs with -t for TTY, cd to workspace, exec `claude --dangerously-skip-permissions`
+- Added to usage, examples, and case dispatch
+- claw CLI: 637 lines (under 800 limit), bash -n syntax check passes
