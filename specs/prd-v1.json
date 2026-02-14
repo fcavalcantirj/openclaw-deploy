@@ -261,7 +261,7 @@
       "All use curl with -s -H 'Authorization: Bearer $SOLVR_API_KEY', exit 0/1",
       "Verify: each function works against Solvr API"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "bugfix",

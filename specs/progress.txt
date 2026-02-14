@@ -106,3 +106,19 @@
 - Created templates/diagnose-prompt.md (99 lines) with full health check definitions and Solvr workflow
 - Solvr section dynamically built: includes API calls with child's key, or "no key" fallback
 - claw CLI: 371 lines (under 800 limit), bash -n syntax check passes
+
+## 2026-02-14: Create scripts/lib/solvr.sh — Solvr API helper functions
+- Created scripts/lib/solvr.sh (245 lines) as shared Solvr API library
+- Requires SOLVR_API_KEY env var; SOLVR_API_URL defaults to https://api.solvr.dev/v1
+- Internal helpers: _solvr_require_key(), _solvr_call(METHOD, endpoint, body)
+- Public functions:
+  - solvr_search(query) — search problems by keyword, URL-encodes query
+  - solvr_post_problem(title, description, tags_csv) — post new problem with tags
+  - solvr_add_approach(problem_id, angle, method) — add approach to existing problem
+  - solvr_update_approach(approach_id, status) — update status (tried/worked/failed)
+  - solvr_verify_approach(approach_id) — mark approach as verified
+  - solvr_get_problem(problem_id) — get problem details
+  - solvr_whoami() — get agent identity for current key
+- All functions print JSON to stdout, return 0/1 based on error field presence
+- All use curl with proper auth headers, timeouts, and JSON content-type
+- bash -n syntax check passes
