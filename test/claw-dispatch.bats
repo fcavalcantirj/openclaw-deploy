@@ -52,6 +52,11 @@ setup() {
   [[ "$output" == *"diagnose"* ]]
 }
 
+@test "claw: usage lists auth command" {
+  run "$CLAW"
+  [[ "$output" == *"auth"* ]]
+}
+
 # ── Line count ───────────────────────────────────────────────────────────────
 
 @test "claw: is under 250 lines (was 554)" {
