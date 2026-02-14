@@ -55,6 +55,7 @@ ${BOLD}Optional:${NC}
   --region REGION         Hetzner region: nbg1, fsn1, hel1 (default: nbg1)
   --type TYPE             Server type (default: cx23)
   --checkpoint-interval   AMCP checkpoint interval (default: 1h)
+  --parent-solvr-name NAME  Override parent Solvr agent name (auto-detected from SOLVR_API_KEY)
   --help                  Show this help
 
 ${BOLD}Auto-created per child:${NC}
@@ -63,6 +64,7 @@ ${BOLD}Auto-created per child:${NC}
   - AgentMemory vault: <name>
   - AMCP identity with Pinata checkpoints
   - Self-healing watchdog
+  - Solvr child agent (if SOLVR_API_KEY set)
 
 ${BOLD}Example:${NC}
   # 1. Create bot via @BotFather, get token
@@ -82,6 +84,7 @@ BOT_TOKEN=""
 REGION="nbg1"
 SERVER_TYPE="cx23"
 CHECKPOINT_INTERVAL="1h"
+PARENT_SOLVR_NAME=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -90,6 +93,7 @@ while [[ $# -gt 0 ]]; do
     --region) REGION="$2"; shift 2 ;;
     --type) SERVER_TYPE="$2"; shift 2 ;;
     --checkpoint-interval) CHECKPOINT_INTERVAL="$2"; shift 2 ;;
+    --parent-solvr-name) PARENT_SOLVR_NAME="$2"; shift 2 ;;
     --help) usage ;;
     *) log_error "Unknown option: $1"; usage ;;
   esac
@@ -119,7 +123,8 @@ Create it with:
   "agentmail_api_key": "am_...",
   "agentmemory_api_key": "...",
   "pinata_jwt": "...",
-  "notify_email": "you@example.com"
+  "notify_email": "you@example.com",
+  "solvr_api_key": "solvr_..."
 }
 EOF
   exit 1
@@ -132,6 +137,7 @@ AGENTMAIL_API_KEY=$(jq -r '.agentmail_api_key // empty' "$CREDENTIALS_FILE")
 AGENTMEMORY_API_KEY=$(jq -r '.agentmemory_api_key // empty' "$CREDENTIALS_FILE")
 PINATA_JWT=$(jq -r '.pinata_jwt // empty' "$CREDENTIALS_FILE")
 NOTIFY_EMAIL=$(jq -r '.notify_email // empty' "$CREDENTIALS_FILE")
+SOLVR_API_KEY=$(jq -r '.solvr_api_key // empty' "$CREDENTIALS_FILE")
 
 # Validate required credentials
 [[ -z "$ANTHROPIC_API_KEY" ]] && { log_error "Missing anthropic_api_key"; exit 1; }
@@ -154,6 +160,91 @@ if [[ $(echo "$BOT_INFO" | jq -r '.ok') != "true" ]]; then
 fi
 BOT_USERNAME=$(echo "$BOT_INFO" | jq -r '.result.username')
 log_success "Bot verified: @${BOT_USERNAME}"
+
+# =============================================================================
+# Register child Solvr account (protocol-08 naming)
+# =============================================================================
+SOLVR_API_URL="${SOLVR_API_URL:-https://api.solvr.dev/v1}"
+CHILD_SOLVR_API_KEY=""
+CHILD_SOLVR_NAME=""
+
+if [[ -n "$SOLVR_API_KEY" ]]; then
+  log_info "Registering child Solvr account..."
+
+  # Step 1: Resolve parent name (auto-detect from /v1/me or use --parent-solvr-name flag)
+  if [[ -z "$PARENT_SOLVR_NAME" ]]; then
+    PARENT_ME_RESPONSE=$(curl -s --connect-timeout 10 --max-time 15 \
+      -H "Authorization: Bearer ${SOLVR_API_KEY}" \
+      -H "Accept: application/json" \
+      "${SOLVR_API_URL}/me" 2>&1 || echo '{}')
+    PARENT_SOLVR_NAME=$(echo "$PARENT_ME_RESPONSE" | jq -r '.data.id // .data.name // empty' 2>/dev/null)
+    if [[ -z "$PARENT_SOLVR_NAME" ]]; then
+      log_error "Could not auto-detect parent Solvr name from /v1/me"
+      log_error "Pass --parent-solvr-name explicitly or check SOLVR_API_KEY"
+      exit 1
+    fi
+  fi
+  log_success "Parent Solvr name: ${PARENT_SOLVR_NAME}"
+
+  # Step 2: Build child name — deterministic protocol-08 naming
+  # Format: {parent}_child_{instance} — lowercase, alphanum+underscore, max 50 chars
+  SANITIZED_INSTANCE=$(echo "$INSTANCE_NAME" | tr '[:upper:]' '[:lower:]' | tr '-' '_' | tr -cd 'a-z0-9_')
+  CHILD_SOLVR_NAME="${PARENT_SOLVR_NAME}_child_${SANITIZED_INSTANCE}"
+
+  # Truncate to 50 chars (Solvr agent ID max)
+  CHILD_SOLVR_NAME="${CHILD_SOLVR_NAME:0:50}"
+
+  # Validate: must be lowercase, alphanum+underscore only
+  if ! [[ "$CHILD_SOLVR_NAME" =~ ^[a-z0-9_]+$ ]]; then
+    log_error "Invalid child Solvr name: ${CHILD_SOLVR_NAME}"
+    log_error "Must be lowercase alphanumeric + underscore only"
+    exit 1
+  fi
+  log_info "Child Solvr name: ${CHILD_SOLVR_NAME}"
+
+  # Step 3: Register child agent via Solvr API
+  REGISTER_PAYLOAD=$(jq -n \
+    --arg id "$CHILD_SOLVR_NAME" \
+    --arg name "$CHILD_SOLVR_NAME" \
+    --arg desc "OpenClaw child instance: ${INSTANCE_NAME}" \
+    --argjson specialties '["openclaw", "gateway", "self-healing"]' \
+    '{id: $id, display_name: $name, bio: $desc, specialties: $specialties}')
+
+  REGISTER_RESPONSE=$(curl -s --connect-timeout 10 --max-time 15 \
+    -X POST "${SOLVR_API_URL}/agents" \
+    -H "Authorization: Bearer ${SOLVR_API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "$REGISTER_PAYLOAD" 2>&1 || echo '{}')
+
+  CHILD_SOLVR_API_KEY=$(echo "$REGISTER_RESPONSE" | jq -r '.data.api_key // empty' 2>/dev/null)
+
+  if [[ -z "$CHILD_SOLVR_API_KEY" ]]; then
+    # Check if already registered (duplicate error)
+    ERROR_CODE=$(echo "$REGISTER_RESPONSE" | jq -r '.error.code // empty' 2>/dev/null)
+    if [[ "$ERROR_CODE" == "DUPLICATE_CONTENT" || "$ERROR_CODE" == "VALIDATION_ERROR" ]]; then
+      log_warn "Child Solvr agent may already exist: ${CHILD_SOLVR_NAME}"
+      log_warn "Continuing without child API key — set manually if needed"
+    else
+      log_warn "Solvr registration failed (non-fatal): $(echo "$REGISTER_RESPONSE" | jq -r '.error.message // "unknown"' 2>/dev/null)"
+    fi
+  else
+    log_success "Child Solvr agent registered: ${CHILD_SOLVR_NAME}"
+
+    # Step 4: Verify child can call GET /v1/me with its own key
+    CHILD_ME_RESPONSE=$(curl -s --connect-timeout 10 --max-time 15 \
+      -H "Authorization: Bearer ${CHILD_SOLVR_API_KEY}" \
+      -H "Accept: application/json" \
+      "${SOLVR_API_URL}/me" 2>&1 || echo '{}')
+    CHILD_VERIFIED_NAME=$(echo "$CHILD_ME_RESPONSE" | jq -r '.data.id // .data.name // empty' 2>/dev/null)
+    if [[ -n "$CHILD_VERIFIED_NAME" ]]; then
+      log_success "Child Solvr verified: ${CHILD_VERIFIED_NAME}"
+    else
+      log_warn "Child Solvr verification skipped (API may take time to propagate)"
+    fi
+  fi
+else
+  log_warn "No SOLVR_API_KEY in credentials — skipping Solvr registration"
+fi
 
 # =============================================================================
 # Create VM
@@ -242,6 +333,8 @@ sed \
   -e "s|__GATEWAY_TOKEN__|${GATEWAY_TOKEN}|g" \
   -e "s|__AMCP_SEED__|${AMCP_SEED}|g" \
   -e "s|__CHECKPOINT_INTERVAL__|${CHECKPOINT_INTERVAL}|g" \
+  -e "s|__CHILD_SOLVR_API_KEY__|${CHILD_SOLVR_API_KEY}|g" \
+  -e "s|__PARENT_SOLVR_NAME__|${PARENT_SOLVR_NAME}|g" \
   "$SCRIPTS_DIR/master-setup.sh" > "$TEMP_SCRIPT"
 
 scp -i "$SSH_KEY_PATH" $SSH_OPTS "$TEMP_SCRIPT" "root@${INSTANCE_IP}:/root/setup.sh"
@@ -257,23 +350,40 @@ log_success "Setup launched (fire & forget)"
 # Save metadata
 # =============================================================================
 mkdir -p "$INSTANCES_DIR/$INSTANCE_NAME"
-cat > "$INSTANCES_DIR/$INSTANCE_NAME/metadata.json" << EOF
-{
-  "name": "${INSTANCE_NAME}",
-  "ip": "${INSTANCE_IP}",
-  "region": "${REGION}",
-  "server_type": "${SERVER_TYPE}",
-  "status": "deploying",
-  "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "ssh_key_path": "${SSH_KEY_PATH}",
-  "gateway_token": "${GATEWAY_TOKEN}",
-  "bot_username": "${BOT_USERNAME}",
-  "bot_token_hint": "${BOT_TOKEN:0:10}...",
-  "email": "${INSTANCE_NAME}@agentmail.to",
-  "amcp_enabled": true,
-  "checkpoint_interval": "${CHECKPOINT_INTERVAL}"
-}
-EOF
+METADATA_FILE="$INSTANCES_DIR/$INSTANCE_NAME/metadata.json"
+jq -n \
+  --arg name "$INSTANCE_NAME" \
+  --arg ip "$INSTANCE_IP" \
+  --arg region "$REGION" \
+  --arg server_type "$SERVER_TYPE" \
+  --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --arg ssh_key_path "$SSH_KEY_PATH" \
+  --arg gateway_token "$GATEWAY_TOKEN" \
+  --arg bot_username "$BOT_USERNAME" \
+  --arg bot_token_hint "${BOT_TOKEN:0:10}..." \
+  --arg email "${INSTANCE_NAME}@agentmail.to" \
+  --arg checkpoint_interval "$CHECKPOINT_INTERVAL" \
+  --arg parent_solvr_name "$PARENT_SOLVR_NAME" \
+  --arg child_solvr_name "$CHILD_SOLVR_NAME" \
+  --arg child_solvr_api_key_hint "${CHILD_SOLVR_API_KEY:0:12}..." \
+  '{
+    name: $name,
+    ip: $ip,
+    region: $region,
+    server_type: $server_type,
+    status: "deploying",
+    created_at: $created_at,
+    ssh_key_path: $ssh_key_path,
+    gateway_token: $gateway_token,
+    bot_username: $bot_username,
+    bot_token_hint: $bot_token_hint,
+    email: $email,
+    amcp_enabled: true,
+    checkpoint_interval: $checkpoint_interval,
+    parent_solvr_name: $parent_solvr_name,
+    child_solvr_name: $child_solvr_name,
+    child_solvr_api_key_hint: $child_solvr_api_key_hint
+  }' > "$METADATA_FILE"
 
 # =============================================================================
 # Done
@@ -288,6 +398,9 @@ echo -e "  ${BOLD}Region:${NC}    ${REGION}"
 echo -e "  ${BOLD}Bot:${NC}       @${BOT_USERNAME}"
 echo -e "  ${BOLD}Email:${NC}     ${INSTANCE_NAME}@agentmail.to (creating...)"
 echo -e "  ${BOLD}AMCP:${NC}      Enabled (checkpoints every ${CHECKPOINT_INTERVAL})"
+if [[ -n "$CHILD_SOLVR_NAME" ]]; then
+  echo -e "  ${BOLD}Solvr:${NC}     ${CHILD_SOLVR_NAME}"
+fi
 echo ""
 echo -e "  ${BOLD}SSH:${NC}       ssh -i ${SSH_KEY_PATH} root@${INSTANCE_IP}"
 echo -e "  ${BOLD}Logs:${NC}      ssh ... 'tail -f /var/log/openclaw-setup.log'"

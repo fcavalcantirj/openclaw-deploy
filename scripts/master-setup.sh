@@ -27,6 +27,8 @@ NOTIFY_EMAIL="__NOTIFY_EMAIL__"
 GATEWAY_TOKEN="__GATEWAY_TOKEN__"
 AMCP_SEED="__AMCP_SEED__"
 CHECKPOINT_INTERVAL="__CHECKPOINT_INTERVAL__"
+CHILD_SOLVR_API_KEY="__CHILD_SOLVR_API_KEY__"
+PARENT_SOLVR_NAME="__PARENT_SOLVR_NAME__"
 
 LOG_FILE="/var/log/openclaw-setup.log"
 CHILD_EMAIL="${INSTANCE_NAME}@agentmail.to"
@@ -196,6 +198,14 @@ main() {
   proactive-amcp config set parent_bot_token "$PARENT_BOT_TOKEN" --amcp-dir "$AMCP_DIR" || log "Warning: failed to set parent_bot_token"
   proactive-amcp config set parent_chat_id "$PARENT_CHAT_ID" --amcp-dir "$AMCP_DIR" || log "Warning: failed to set parent_chat_id"
   proactive-amcp config set instance_name "$INSTANCE_NAME" --amcp-dir "$AMCP_DIR" || log "Warning: failed to set instance_name"
+
+  # Store Solvr credentials (if child was registered)
+  if [[ -n "$CHILD_SOLVR_API_KEY" ]]; then
+    proactive-amcp config set solvr_api_key "$CHILD_SOLVR_API_KEY" --amcp-dir "$AMCP_DIR" || log "Warning: failed to set solvr_api_key"
+    proactive-amcp config set parent_solvr_name "$PARENT_SOLVR_NAME" --amcp-dir "$AMCP_DIR" || log "Warning: failed to set parent_solvr_name"
+    log "Solvr credentials stored in proactive-amcp config"
+  fi
+
   chown -R openclaw:openclaw "$AMCP_DIR"
   log "Secrets stored in proactive-amcp config (not identity.json)"
 
@@ -229,6 +239,12 @@ main() {
     "entries": {
       "telegram": {
         "enabled": true
+      },
+      "proactive-amcp": {
+        "enabled": true,
+        "config": {
+          "parentSolvrName": "${PARENT_SOLVR_NAME}"
+        }
       }
     }
   },

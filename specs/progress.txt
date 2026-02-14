@@ -74,3 +74,21 @@
 - Updated header comment to reflect proactive-amcp delegation
 - No orphaned variables, no orphaned references to removed sections
 - bash -n syntax check passes
+
+## 2026-02-14: Register child Solvr account during deployment
+- Added SOLVR_API_KEY loading from credentials.json in deploy.sh
+- Added --parent-solvr-name flag (optional, auto-detects from /v1/me if not provided)
+- Step 1: Resolves parent name via GET /v1/me with parent's SOLVR_API_KEY
+- Step 2: Builds deterministic child name: {parent}_child_{instance} (protocol-08 naming)
+  - Sanitizes instance name: lowercase, hyphens→underscores, alphanum+underscore only
+  - Truncates to 50 chars (Solvr agent ID max)
+  - Validates format before registration
+- Step 3: Registers child agent via POST /v1/agents with parent's auth
+- Step 4: Verifies child can call GET /v1/me with its own returned API key
+- Stores child Solvr API key in proactive-amcp config on VM (via master-setup.sh)
+- Stores parentSolvrName in OpenClaw config at plugins.entries.proactive-amcp.config
+- Adds parent_solvr_name, child_solvr_name, child_solvr_api_key_hint to metadata.json
+- Idempotent: handles DUPLICATE_CONTENT error gracefully (non-fatal warning)
+- Solvr registration is optional: skips if no SOLVR_API_KEY in credentials
+- deploy.sh: 409 lines, master-setup.sh: 404 lines (both under 800 limit)
+- bash -n syntax check passes on both files

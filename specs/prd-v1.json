@@ -178,7 +178,7 @@
       "Store parentSolvrName in child config at skills.entries.proactive-amcp.config.parentSolvrName",
       "Verify: child can call GET /v1/me with its own key, name matches pattern"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "cli",
