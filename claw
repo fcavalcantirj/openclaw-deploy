@@ -30,6 +30,7 @@ ${BOLD}Commands:${NC}
   ${GREEN}destroy${NC} NAME                           Destroy child instance
   ${GREEN}diagnose${NC} NAME|self                      Run health checks + Solvr search
   ${GREEN}fix${NC} NAME                               Fix issues via Solvr, escalate after 3 failures
+  ${GREEN}upgrade${NC} NAME [--dry-run]                Upgrade tool stack on child
   ${GREEN}shell${NC} NAME                              Interactive Claude Code on child
   ${GREEN}ssh${NC} NAME                               SSH into child (for debugging)
 
@@ -545,6 +546,7 @@ case "$cmd" in
   logs)     cmd_logs "$@" ;;
   restart)  cmd_restart "$@" ;;
   destroy)  cmd_destroy "$@" ;;
+  upgrade)  "$SCRIPT_DIR/scripts/upgrade.sh" "$@" ;;
   shell)    cmd_shell "$@" ;;
   ssh)      cmd_ssh "$@" ;;
   help)     usage ;;

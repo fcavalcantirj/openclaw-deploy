@@ -166,6 +166,64 @@ else
   log_error "${MEM_USAGE}% (high)"
 fi
 
+# Tool stack — batch all checks in one SSH call to minimize round-trips
+echo ""
+echo "Tool Stack:"
+TOOL_STACK_MISSING=false
+
+TOOL_CHECK=$(ssh_exec "$INSTANCE_NAME" "bash -c '
+  # proactive-amcp: prefer git hash from skill dir, fall back to which
+  PAMCP_DIR=\$HOME/.openclaw/skills/proactive-amcp
+  if [ -d \"\$PAMCP_DIR/.git\" ]; then
+    echo \"pamcp:git:\$(cd \"\$PAMCP_DIR\" && git rev-parse --short HEAD 2>/dev/null || echo unknown)\"
+  elif command -v proactive-amcp &>/dev/null; then
+    echo \"pamcp:bin:\$(proactive-amcp --version 2>/dev/null || echo installed)\"
+  else
+    echo \"pamcp:missing\"
+  fi
+  # Claude Code CLI
+  if command -v claude &>/dev/null; then
+    echo \"claude:ok:\$(claude --version 2>/dev/null | head -1 || echo installed)\"
+  else
+    echo \"claude:missing\"
+  fi
+  # Solvr skill
+  if [ -f \"\$HOME/.claude/skills/solvr/SKILL.md\" ] || [ -d \"\$HOME/.claude/skills/solvr/scripts\" ]; then
+    echo \"solvr:ok\"
+  else
+    echo \"solvr:missing\"
+  fi
+'" 2>/dev/null || echo "pamcp:error
+claude:error
+solvr:error")
+
+# Parse batched results
+PAMCP_LINE=$(echo "$TOOL_CHECK" | grep '^pamcp:')
+CLAUDE_LINE=$(echo "$TOOL_CHECK" | grep '^claude:')
+SOLVR_LINE=$(echo "$TOOL_CHECK" | grep '^solvr:')
+
+echo -n "  proactive-amcp:       "
+case "$PAMCP_LINE" in
+  pamcp:git:*)  log_success "${PAMCP_LINE#pamcp:git:}" ;;
+  pamcp:bin:*)  log_success "${PAMCP_LINE#pamcp:bin:}" ;;
+  pamcp:missing) log_warn "Not installed"; TOOL_STACK_MISSING=true ;;
+  *)            log_error "Check failed"; TOOL_STACK_MISSING=true ;;
+esac
+
+echo -n "  Claude Code CLI:      "
+case "$CLAUDE_LINE" in
+  claude:ok:*)  log_success "${CLAUDE_LINE#claude:ok:}" ;;
+  claude:missing) log_warn "Not installed"; TOOL_STACK_MISSING=true ;;
+  *)            log_error "Check failed"; TOOL_STACK_MISSING=true ;;
+esac
+
+echo -n "  Solvr skill:          "
+case "$SOLVR_LINE" in
+  solvr:ok)     log_success "Installed" ;;
+  solvr:missing) log_warn "Not installed"; TOOL_STACK_MISSING=true ;;
+  *)            log_error "Check failed"; TOOL_STACK_MISSING=true ;;
+esac
+
 # Recent logs
 echo ""
 echo "Recent Gateway Logs:"
@@ -179,4 +237,7 @@ echo "  SSH to instance:     claw ssh $INSTANCE_NAME"
 echo "  View full logs:      claw logs $INSTANCE_NAME -f"
 echo "  Restart gateway:     claw restart $INSTANCE_NAME"
 echo "  Diagnose issues:     claw diagnose $INSTANCE_NAME"
+if [ "$TOOL_STACK_MISSING" = true ]; then
+  echo "  Upgrade tools:       claw upgrade $INSTANCE_NAME"
+fi
 echo ""
