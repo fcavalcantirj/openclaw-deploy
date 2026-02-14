@@ -166,7 +166,7 @@
       "Verify bash -n passes on the reduced script",
       "Verify no orphaned variables or references to removed sections"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "deploy",

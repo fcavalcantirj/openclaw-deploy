@@ -8,8 +8,7 @@
 #   - Telegram bot config
 #   - AgentMail inbox
 #   - AgentMemory vault
-#   - AMCP identity + first checkpoint
-#   - proactive-amcp watchdog (3-stage self-healing)
+#   - AMCP identity + proactive-amcp (watchdog, checkpoints, secrets)
 # =============================================================================
 set -euo pipefail
 
@@ -361,7 +360,7 @@ SVCEOF
   # Step 13: First checkpoint
   # -------------------------------------------------------------------------
   notify "Creating first checkpoint..."
-  /usr/local/bin/openclaw-checkpoint || log "First checkpoint failed (non-fatal)"
+  proactive-amcp checkpoint --amcp-dir "$AMCP_DIR" || log "First checkpoint failed (non-fatal)"
 
   # -------------------------------------------------------------------------
   # Step 14: Complete!

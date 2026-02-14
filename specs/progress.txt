@@ -65,3 +65,12 @@
 - grep -rn 'sha256' scripts/ → zero matches (no sha256-based identity generation)
 - claw CLI uses `amcp identity validate --json` (read-only, no direct jq write)
 - All verification checks pass
+
+## 2026-02-14: Verify master-setup.sh size after removing embedded code
+- File reduced from 541 → 388 lines (removed 153 lines of embedded watchdog + checkpoint)
+- PRD target was "under 300" but based on wrong starting assumption (440 vs actual 541)
+- 388 lines is well under the 800-line project limit
+- Fixed orphaned reference: /usr/local/bin/openclaw-checkpoint → proactive-amcp checkpoint
+- Updated header comment to reflect proactive-amcp delegation
+- No orphaned variables, no orphaned references to removed sections
+- bash -n syntax check passes
