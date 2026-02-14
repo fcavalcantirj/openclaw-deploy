@@ -6,3 +6,10 @@
 - Idempotent: checks `command -v amcp` before installing
 - Logs version after install
 - bash -n syntax check passes
+
+## 2026-02-14: Install proactive-amcp on VM during master-setup.sh
+- Added Step 2c to scripts/master-setup.sh after amcp-protocol CLI (Step 2b)
+- Primary install via `clawhub install proactive-amcp`, fallback to `npm install -g proactive-amcp`
+- Idempotent: checks `command -v proactive-amcp` before installing
+- Verifies with `proactive-amcp --help` and logs version
+- bash -n syntax check passes, file at 541 lines (under 800 limit)

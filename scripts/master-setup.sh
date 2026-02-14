@@ -103,6 +103,23 @@ main() {
   log "AMCP CLI: $(amcp --version 2>/dev/null || echo 'installed')"
 
   # -------------------------------------------------------------------------
+  # Step 2c: Install proactive-amcp
+  # -------------------------------------------------------------------------
+  notify "Installing proactive-amcp..."
+  if ! command -v proactive-amcp &>/dev/null; then
+    # Primary: install via clawhub
+    if command -v clawhub &>/dev/null && clawhub install proactive-amcp 2>/dev/null; then
+      log "proactive-amcp installed via clawhub"
+    else
+      # Fallback: install via npm
+      npm install -g proactive-amcp || fail "proactive-amcp install failed"
+      log "proactive-amcp installed via npm"
+    fi
+  fi
+  proactive-amcp --help >/dev/null 2>&1 || log "Warning: proactive-amcp --help returned non-zero (may be expected)"
+  log "proactive-amcp: $(proactive-amcp --version 2>/dev/null || echo 'installed')"
+
+  # -------------------------------------------------------------------------
   # Step 3: Create openclaw user
   # -------------------------------------------------------------------------
   notify "Creating user..."

@@ -79,7 +79,7 @@
       "Fallback: git clone from known repo if clawhub unavailable",
       "Verify proactive-amcp commands are available: 'proactive-amcp --help'"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "integration",
