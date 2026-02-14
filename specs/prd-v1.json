@@ -155,7 +155,7 @@
       "Run: grep -rn 'identity.json' scripts/ — verify remaining references are reads or documentation only",
       "Run: grep -rn 'sha256' scripts/ — verify no sha256-based identity generation remains"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "testing",

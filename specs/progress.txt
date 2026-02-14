@@ -58,3 +58,10 @@
 - Shows AID prefix (truncated to 20 chars), valid/invalid status from structured output
 - Removed references to .deaths and .last_checkpoint (now managed by proactive-amcp)
 - bash -n syntax check passes
+
+## 2026-02-14: Verify zero jq identity.json writes remaining
+- grep -rn 'jq.*identity.json' scripts/ prompts/ → zero matches
+- grep -rn 'identity.json' scripts/ → only path variable, error msg, and comments (zero writes)
+- grep -rn 'sha256' scripts/ → zero matches (no sha256-based identity generation)
+- claw CLI uses `amcp identity validate --json` (read-only, no direct jq write)
+- All verification checks pass
