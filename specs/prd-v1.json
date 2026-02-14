@@ -191,7 +191,7 @@
       "Return JSON: {checks_passed, checks_failed, errors, solvr_matches}",
       "Verify: claw diagnose <instance> returns valid JSON with Solvr matches"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "cli",
@@ -225,7 +225,7 @@
       "Define output format: JSON with checks_passed, checks_failed, errors, solvr_matches",
       "Verify: prompt is unambiguous, Claude Code can follow without interpretation"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "template",

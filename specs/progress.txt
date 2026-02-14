@@ -92,3 +92,17 @@
 - Solvr registration is optional: skips if no SOLVR_API_KEY in credentials
 - deploy.sh: 409 lines, master-setup.sh: 404 lines (both under 800 limit)
 - bash -n syntax check passes on both files
+
+## 2026-02-14: Add 'claw diagnose' command + diagnose prompt template
+- Added cmd_diagnose to claw CLI (claw:212-343)
+- SSHs to instance with -t for TTY, reads SOLVR_API_KEY from proactive-amcp config on VM
+- Loads templates/diagnose-prompt.md, substitutes {{INSTANCE_NAME}} and {{SOLVR_SECTION}}
+- Uploads prompt to VM via scp, runs Claude Code with --print
+- Claude Code checks 7 items: gateway_process, port_18789, auth_profiles, systemd_service, disk_space, memory, recent_logs
+- For each error: searches Solvr for existing solutions, posts novel issues as problems
+- Returns structured JSON: {checks_passed, checks_failed, checks, errors, solvr_matches, solvr_posts}
+- Robust JSON extraction: strips TTY control chars, uses python3 to find outermost JSON object
+- Fallback: returns error JSON with raw_output if Claude output is not valid JSON
+- Created templates/diagnose-prompt.md (99 lines) with full health check definitions and Solvr workflow
+- Solvr section dynamically built: includes API calls with child's key, or "no key" fallback
+- claw CLI: 371 lines (under 800 limit), bash -n syntax check passes

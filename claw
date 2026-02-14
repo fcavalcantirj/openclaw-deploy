@@ -32,12 +32,14 @@ ${BOLD}Commands:${NC}
   ${GREEN}logs${NC} NAME [-f]                         View child logs (-f to follow)
   ${GREEN}restart${NC} NAME                           Restart child gateway
   ${GREEN}destroy${NC} NAME                           Destroy child instance
+  ${GREEN}diagnose${NC} NAME                           Run health checks + Solvr search
   ${GREEN}ssh${NC} NAME                               SSH into child (for debugging)
 
 ${BOLD}Examples:${NC}
   claw deploy --name bruce --bot-token "123:ABC..."
   claw list
   claw approve bruce 3R7YX6KS
+  claw diagnose bruce
   claw message bruce "Hello from parent!"
   claw logs bruce -f
   claw destroy bruce
@@ -207,6 +209,139 @@ cmd_ssh() {
   ssh -i "$key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "openclaw@$ip"
 }
 
+cmd_diagnose() {
+  local name="${1:?Usage: claw diagnose NAME}"
+  local ip=$(get_meta "$name" "ip")
+  local key=$(get_meta "$name" "ssh_key_path")
+
+  [[ -z "$ip" ]] && { echo "Instance '$name' not found"; exit 1; }
+
+  local ssh_base="ssh -i $key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
+
+  echo -e "${BLUE}Diagnosing $name ($ip)...${NC}" >&2
+
+  # Read child's Solvr API key from proactive-amcp config on the VM
+  local solvr_key
+  solvr_key=$($ssh_base "root@$ip" \
+    "proactive-amcp config get solvr_api_key --amcp-dir /home/openclaw/.amcp 2>/dev/null || echo ''" 2>/dev/null)
+  solvr_key=$(echo "$solvr_key" | tr -d '[:space:]')
+
+  # Read Anthropic key from credentials or environment
+  local credentials_file="$INSTANCES_DIR/credentials.json"
+  local anthropic_key=""
+  if [[ -f "$credentials_file" ]]; then
+    anthropic_key=$(jq -r '.anthropic_api_key // empty' "$credentials_file")
+  fi
+  if [[ -z "$anthropic_key" ]]; then
+    anthropic_key="${ANTHROPIC_API_KEY:-}"
+  fi
+  if [[ -z "$anthropic_key" ]]; then
+    echo -e "${RED}No ANTHROPIC_API_KEY found in credentials or environment${NC}" >&2
+    exit 1
+  fi
+
+  # Load diagnose prompt template
+  local template_file="$SCRIPT_DIR/templates/diagnose-prompt.md"
+  if [[ ! -f "$template_file" ]]; then
+    echo -e "${RED}Template not found: $template_file${NC}" >&2
+    exit 1
+  fi
+
+  # Build prompt file locally with placeholders replaced
+  local prompt_tmp
+  prompt_tmp=$(mktemp /tmp/claw-diagnose-XXXXXX.md)
+  trap "rm -f '$prompt_tmp'" RETURN
+
+  # Build Solvr section based on key availability
+  local solvr_section_file
+  solvr_section_file=$(mktemp /tmp/claw-solvr-XXXXXX.txt)
+  if [[ -n "$solvr_key" && "$solvr_key" != "null" ]]; then
+    cat > "$solvr_section_file" << SOLVREOF
+For each failed check:
+1. Search Solvr for existing solutions:
+   curl -s -H "Authorization: Bearer ${solvr_key}" -G --data-urlencode "q=<error description>" "https://api.solvr.dev/v1/problems/search"
+2. If a matching problem exists, include it in solvr_matches
+3. If NO match found, post a new problem:
+   curl -s -X POST "https://api.solvr.dev/v1/problems" -H "Authorization: Bearer ${solvr_key}" -H "Content-Type: application/json" -d '{"title": "<short title>", "description": "<error details>", "tags": ["openclaw", "gateway", "auto-diagnose"]}'
+4. Include posted problems in solvr_posts
+SOLVREOF
+  else
+    echo "No Solvr API key available. Set solvr_matches and solvr_posts to empty arrays." > "$solvr_section_file"
+  fi
+
+  # Replace placeholders: INSTANCE_NAME inline, SOLVR_SECTION via awk (multiline-safe)
+  awk -v name="$name" -v solvr_file="$solvr_section_file" '
+    { gsub(/\{\{INSTANCE_NAME\}\}/, name) }
+    /\{\{SOLVR_SECTION\}\}/ { while ((getline line < solvr_file) > 0) print line; next }
+    { print }
+  ' "$template_file" > "$prompt_tmp"
+  rm -f "$solvr_section_file"
+
+  # Upload prompt to VM
+  local remote_prompt="/tmp/claw-diagnose-prompt.md"
+  scp -i "$key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+    "$prompt_tmp" "root@${ip}:${remote_prompt}" 2>/dev/null
+  rm -f "$prompt_tmp"
+
+  echo -e "${BLUE}Running Claude Code on $name...${NC}" >&2
+
+  # Run Claude Code on the VM with the uploaded prompt, then clean up
+  local result
+  result=$($ssh_base -t "root@$ip" \
+    "ANTHROPIC_API_KEY='${anthropic_key}' claude --print \"\$(cat ${remote_prompt})\" ; rm -f ${remote_prompt}" 2>/dev/null)
+
+  # Strip TTY control characters (from -t flag)
+  result=$(echo "$result" | tr -d '\r' | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g')
+
+  # Extract JSON from output — Claude may include surrounding text
+  local json_output
+  json_output=$(echo "$result" | python3 -c "
+import sys, json
+text = sys.stdin.read()
+# Find the outermost JSON object
+depth = 0
+start = -1
+for i, c in enumerate(text):
+    if c == '{':
+        if depth == 0:
+            start = i
+        depth += 1
+    elif c == '}':
+        depth -= 1
+        if depth == 0 and start >= 0:
+            candidate = text[start:i+1]
+            try:
+                obj = json.loads(candidate)
+                print(json.dumps(obj))
+                sys.exit(0)
+            except json.JSONDecodeError:
+                start = -1
+print('')
+" 2>/dev/null)
+
+  if [[ -n "$json_output" ]] && echo "$json_output" | jq . >/dev/null 2>&1; then
+    echo "$json_output" | jq .
+  else
+    # Could not parse — return raw output wrapped in error JSON
+    echo -e "${YELLOW}Warning: Could not parse JSON from Claude Code output${NC}" >&2
+    jq -n \
+      --arg instance "$name" \
+      --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      --arg raw_output "$result" \
+      '{
+        instance: $instance,
+        timestamp: $timestamp,
+        checks_passed: 0,
+        checks_failed: 0,
+        checks: {},
+        errors: ["diagnose output was not valid JSON — see raw_output"],
+        solvr_matches: [],
+        solvr_posts: [],
+        raw_output: $raw_output
+      }'
+  fi
+}
+
 cmd_deploy() {
   "$SCRIPT_DIR/deploy.sh" "$@"
 }
@@ -221,15 +356,16 @@ cmd="$1"
 shift
 
 case "$cmd" in
-  deploy)  cmd_deploy "$@" ;;
-  list)    cmd_list ;;
-  status)  cmd_status "$@" ;;
-  approve) cmd_approve "$@" ;;
-  message) cmd_message "$@" ;;
-  logs)    cmd_logs "$@" ;;
-  restart) cmd_restart "$@" ;;
-  destroy) cmd_destroy "$@" ;;
-  ssh)     cmd_ssh "$@" ;;
-  help)    usage ;;
-  *)       echo "Unknown command: $cmd"; usage ;;
+  deploy)   cmd_deploy "$@" ;;
+  list)     cmd_list ;;
+  status)   cmd_status "$@" ;;
+  diagnose) cmd_diagnose "$@" ;;
+  approve)  cmd_approve "$@" ;;
+  message)  cmd_message "$@" ;;
+  logs)     cmd_logs "$@" ;;
+  restart)  cmd_restart "$@" ;;
+  destroy)  cmd_destroy "$@" ;;
+  ssh)      cmd_ssh "$@" ;;
+  help)     usage ;;
+  *)        echo "Unknown command: $cmd"; usage ;;
 esac
