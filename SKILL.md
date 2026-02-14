@@ -1,6 +1,6 @@
 ---
 name: openclaw-deploy
-version: 1.1.0
+version: 1.2.0
 description: "Fleet management for OpenClaw Gateway instances on Hetzner Cloud. Provisions, monitors, diagnoses, and self-heals child instances with dedicated Telegram bots. Use when deploying instances, managing fleet, diagnosing issues, onboarding users, or checking fleet health."
 triggers:
   - deploy

@@ -1,6 +1,6 @@
 {
   "name": "openclaw-deploy",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Fleet management for OpenClaw Gateway on Hetzner Cloud",
   "author": "OpenClaw Team",
   "license": "MIT",
