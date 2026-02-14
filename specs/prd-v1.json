@@ -112,7 +112,7 @@
       "Replace with: proactive-amcp install --checkpoint-schedule '0 */6 * * *'",
       "Verify checkpoint cron is active"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "integration",

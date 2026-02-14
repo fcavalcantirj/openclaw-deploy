@@ -283,78 +283,27 @@ AUTHEOF
   fi
 
   # -------------------------------------------------------------------------
-  # Step 10: Create AMCP checkpoint script
+  # Step 10: Install proactive-amcp checkpoint
   # -------------------------------------------------------------------------
-  cat > /usr/local/bin/openclaw-checkpoint << 'CHECKPOINTEOF'
-#!/usr/bin/env bash
-# AMCP Checkpoint — archives OpenClaw config + AMCP identity to Pinata/IPFS
-set -euo pipefail
+  notify "Setting up checkpoints..."
 
-AMCP_FILE="/home/openclaw/.amcp/identity.json"
-OPENCLAW_DIR="/home/openclaw/.openclaw"
-LOG="/var/log/openclaw-checkpoint.log"
-
-log() { echo "[$(date -u '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG"; }
-
-if [[ ! -f "$AMCP_FILE" ]]; then
-  log "No AMCP identity file — skipping checkpoint"
-  exit 0
-fi
-
-PINATA_JWT=$(jq -r '.pinata_jwt' "$AMCP_FILE")
-INSTANCE=$(jq -r '.instance' "$AMCP_FILE")
-
-if [[ -z "$PINATA_JWT" || "$PINATA_JWT" == "null" ]]; then
-  log "No Pinata JWT configured — skipping checkpoint"
-  exit 0
-fi
-
-# Create checkpoint tarball
-CHECKPOINT_DIR=$(mktemp -d)
-trap "rm -rf '$CHECKPOINT_DIR'" EXIT
-
-cp -r "$OPENCLAW_DIR" "$CHECKPOINT_DIR/openclaw" 2>/dev/null || true
-cp "$AMCP_FILE" "$CHECKPOINT_DIR/amcp-identity.json"
-
-# Remove auth-profiles from checkpoint (contains API keys in cleartext)
-# The keys are still in the AMCP identity for recovery
-rm -f "$CHECKPOINT_DIR/openclaw/agents/main/agent/auth-profiles.json" 2>/dev/null || true
-
-TARBALL="${CHECKPOINT_DIR}/checkpoint.tar.gz"
-tar -czf "$TARBALL" -C "$CHECKPOINT_DIR" openclaw amcp-identity.json
-
-# Upload to Pinata
-RESPONSE=$(curl -s --connect-timeout 15 --max-time 120 \
-  -X POST "https://api.pinata.cloud/pinning/pinFileToIPFS" \
-  -H "Authorization: Bearer ${PINATA_JWT}" \
-  -F "file=@${TARBALL}" \
-  -F "pinataMetadata={\"name\": \"${INSTANCE}-checkpoint-$(date +%Y%m%d-%H%M%S)\"}" 2>&1)
-
-CID=$(echo "$RESPONSE" | jq -r '.IpfsHash // empty' 2>/dev/null)
-if [[ -n "$CID" ]]; then
-  log "Checkpoint created: $CID ($(du -sh "$TARBALL" | cut -f1))"
-
-  # Update AMCP identity with latest checkpoint
-  jq ".last_checkpoint = \"$CID\" | .last_checkpoint_at = \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"" \
-    "$AMCP_FILE" > "${AMCP_FILE}.tmp" && mv "${AMCP_FILE}.tmp" "$AMCP_FILE"
-  chown openclaw:openclaw "$AMCP_FILE"
-else
-  log "Checkpoint FAILED: $(echo "$RESPONSE" | head -c 200)"
-fi
-CHECKPOINTEOF
-  chmod +x /usr/local/bin/openclaw-checkpoint
-
-  # Checkpoint cron (based on interval)
+  # Convert human-readable interval to cron expression
   case "$CHECKPOINT_INTERVAL" in
-    1h|hourly) CRON_EXPR="0 * * * *" ;;
-    2h) CRON_EXPR="0 */2 * * *" ;;
-    6h) CRON_EXPR="0 */6 * * *" ;;
-    12h) CRON_EXPR="0 */12 * * *" ;;
-    24h|daily) CRON_EXPR="0 0 * * *" ;;
-    *) CRON_EXPR="0 * * * *" ;;
+    1h|hourly) CHECKPOINT_CRON="0 * * * *" ;;
+    2h)        CHECKPOINT_CRON="0 */2 * * *" ;;
+    6h)        CHECKPOINT_CRON="0 */6 * * *" ;;
+    12h)       CHECKPOINT_CRON="0 */12 * * *" ;;
+    24h|daily) CHECKPOINT_CRON="0 0 * * *" ;;
+    *)         CHECKPOINT_CRON="0 */6 * * *" ;;
   esac
-  echo "${CRON_EXPR} root /usr/local/bin/openclaw-checkpoint" > /etc/cron.d/openclaw-checkpoint
-  chmod 644 /etc/cron.d/openclaw-checkpoint
+
+  # Delegate to proactive-amcp: installs checkpoint script, cron, and IPFS upload logic
+  proactive-amcp install --checkpoint-schedule "$CHECKPOINT_CRON" \
+    --amcp-dir "$AMCP_DIR" \
+    --openclaw-dir "/home/openclaw/.openclaw" \
+    || fail "proactive-amcp checkpoint install failed"
+
+  log "Checkpoint installed (schedule: $CHECKPOINT_CRON)"
 
   # -------------------------------------------------------------------------
   # Step 11: Start gateway
