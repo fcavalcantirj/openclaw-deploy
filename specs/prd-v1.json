@@ -249,7 +249,7 @@
       "Store in child OpenClaw config: skills.entries.proactive-amcp.config.parentSolvrName",
       "Verify: metadata.json and child config both have parent references after deploy"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "lib",

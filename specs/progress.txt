@@ -156,3 +156,11 @@
 - SSHs with -t for TTY, cd to workspace, exec `claude --dangerously-skip-permissions`
 - Added to usage, examples, and case dispatch
 - claw CLI: 637 lines (under 800 limit), bash -n syntax check passes
+
+## 2026-02-14: Store parent config in metadata.json during deploy
+- Added --parent-telegram-token, --parent-chat-id, --parent-email flags to deploy.sh
+- Flags override values from credentials.json (flags take priority)
+- metadata.json now includes parent_telegram_token, parent_chat_id, parent_email
+- claw fix reads these fields from metadata for escalation notifications
+- master-setup.sh already stores parentSolvrName in child OpenClaw config (plugins.entries.proactive-amcp.config)
+- deploy.sh: 429 lines (under 800 limit), bash -n syntax check passes

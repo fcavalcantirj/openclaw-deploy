@@ -56,6 +56,9 @@ ${BOLD}Optional:${NC}
   --type TYPE             Server type (default: cx23)
   --checkpoint-interval   AMCP checkpoint interval (default: 1h)
   --parent-solvr-name NAME  Override parent Solvr agent name (auto-detected from SOLVR_API_KEY)
+  --parent-telegram-token TOKEN  Override parent Telegram bot token
+  --parent-chat-id ID     Override parent Telegram chat ID
+  --parent-email EMAIL    Override parent notification email
   --help                  Show this help
 
 ${BOLD}Auto-created per child:${NC}
@@ -85,6 +88,9 @@ REGION="nbg1"
 SERVER_TYPE="cx23"
 CHECKPOINT_INTERVAL="1h"
 PARENT_SOLVR_NAME=""
+FLAG_PARENT_TELEGRAM_TOKEN=""
+FLAG_PARENT_CHAT_ID=""
+FLAG_PARENT_EMAIL=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -94,6 +100,9 @@ while [[ $# -gt 0 ]]; do
     --type) SERVER_TYPE="$2"; shift 2 ;;
     --checkpoint-interval) CHECKPOINT_INTERVAL="$2"; shift 2 ;;
     --parent-solvr-name) PARENT_SOLVR_NAME="$2"; shift 2 ;;
+    --parent-telegram-token) FLAG_PARENT_TELEGRAM_TOKEN="$2"; shift 2 ;;
+    --parent-chat-id) FLAG_PARENT_CHAT_ID="$2"; shift 2 ;;
+    --parent-email) FLAG_PARENT_EMAIL="$2"; shift 2 ;;
     --help) usage ;;
     *) log_error "Unknown option: $1"; usage ;;
   esac
@@ -138,6 +147,11 @@ AGENTMEMORY_API_KEY=$(jq -r '.agentmemory_api_key // empty' "$CREDENTIALS_FILE")
 PINATA_JWT=$(jq -r '.pinata_jwt // empty' "$CREDENTIALS_FILE")
 NOTIFY_EMAIL=$(jq -r '.notify_email // empty' "$CREDENTIALS_FILE")
 SOLVR_API_KEY=$(jq -r '.solvr_api_key // empty' "$CREDENTIALS_FILE")
+
+# Apply flag overrides (flags take priority over credentials.json)
+[[ -n "$FLAG_PARENT_TELEGRAM_TOKEN" ]] && PARENT_BOT_TOKEN="$FLAG_PARENT_TELEGRAM_TOKEN"
+[[ -n "$FLAG_PARENT_CHAT_ID" ]] && PARENT_CHAT_ID="$FLAG_PARENT_CHAT_ID"
+[[ -n "$FLAG_PARENT_EMAIL" ]] && NOTIFY_EMAIL="$FLAG_PARENT_EMAIL"
 
 # Validate required credentials
 [[ -z "$ANTHROPIC_API_KEY" ]] && { log_error "Missing anthropic_api_key"; exit 1; }
@@ -366,6 +380,9 @@ jq -n \
   --arg parent_solvr_name "$PARENT_SOLVR_NAME" \
   --arg child_solvr_name "$CHILD_SOLVR_NAME" \
   --arg child_solvr_api_key_hint "${CHILD_SOLVR_API_KEY:0:12}..." \
+  --arg parent_telegram_token "$PARENT_BOT_TOKEN" \
+  --arg parent_chat_id "$PARENT_CHAT_ID" \
+  --arg parent_email "$NOTIFY_EMAIL" \
   '{
     name: $name,
     ip: $ip,
@@ -382,7 +399,10 @@ jq -n \
     checkpoint_interval: $checkpoint_interval,
     parent_solvr_name: $parent_solvr_name,
     child_solvr_name: $child_solvr_name,
-    child_solvr_api_key_hint: $child_solvr_api_key_hint
+    child_solvr_api_key_hint: $child_solvr_api_key_hint,
+    parent_telegram_token: $parent_telegram_token,
+    parent_chat_id: $parent_chat_id,
+    parent_email: $parent_email
   }' > "$METADATA_FILE"
 
 # =============================================================================
