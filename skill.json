@@ -1,0 +1,29 @@
+{
+  "name": "openclaw-deploy",
+  "version": "1.1.0",
+  "description": "Fleet management for OpenClaw Gateway on Hetzner Cloud",
+  "author": "OpenClaw Team",
+  "license": "MIT",
+  "homepage": "https://github.com/fcavalcantirj/openclaw-deploy",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fcavalcantirj/openclaw-deploy"
+  },
+  "keywords": ["fleet", "deploy", "hetzner", "telegram", "monitoring", "self-healing"],
+  "category": "infrastructure-management",
+  "files": {
+    "skill": "SKILL.md",
+    "cli": "claw",
+    "commands_reference": "references/commands.md",
+    "deployment_guide": "references/deployment.md",
+    "troubleshooting": "references/troubleshooting.md"
+  },
+  "requirements": {
+    "bins": ["hcloud", "jq", "ssh", "curl"],
+    "env": {
+      "required": ["HCLOUD_TOKEN"],
+      "optional": ["ANTHROPIC_API_KEY", "SOLVR_API_KEY"]
+    }
+  },
+  "capabilities": ["vm-provisioning", "fleet-monitoring", "telegram-bot-management", "self-healing"]
+}

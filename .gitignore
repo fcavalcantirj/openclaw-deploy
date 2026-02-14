@@ -29,3 +29,5 @@ credentials.json
 hcloud-verified.json
 *.json
 !templates/*.json
+!_meta.json
+!skill.json
