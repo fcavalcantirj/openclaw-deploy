@@ -121,7 +121,7 @@ echo
 # Stop the gateway
 info "Stopping gateway..."
 ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-  "openclaw@$IP" "systemctl --user stop openclaw-gateway" || warning "Stop command may have failed"
+  "openclaw@$IP" "sudo systemctl stop openclaw-gateway" || warning "Stop command may have failed"
 
 success "Gateway stopped"
 echo
@@ -149,7 +149,7 @@ if echo "$UPDATE_OUTPUT" | grep -qi "UPDATE_FAILED\|error\|failed"; then
 
   1. SSH to instance: ssh -i '$SSH_KEY' openclaw@$IP
   2. Check npm logs: npm install -g openclaw@$VERSION
-  3. Restart gateway: systemctl --user start openclaw-gateway"
+  3. Restart gateway: sudo systemctl start openclaw-gateway"
 fi
 
 echo "$UPDATE_OUTPUT" | tail -10
@@ -168,16 +168,16 @@ echo
 # Start the gateway
 info "Starting gateway..."
 START_OUTPUT=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-  "openclaw@$IP" "systemctl --user start openclaw-gateway 2>&1" || echo "START_FAILED")
+  "openclaw@$IP" "sudo systemctl start openclaw-gateway 2>&1" || echo "START_FAILED")
 
 if echo "$START_OUTPUT" | grep -qi "START_FAILED"; then
   error "Failed to start gateway:\n$START_OUTPUT
 
 Manual recovery:
   1. SSH to instance: ssh -i '$SSH_KEY' openclaw@$IP
-  2. Check status: systemctl --user status openclaw-gateway
-  3. Check logs: journalctl --user -u openclaw-gateway -n 50
-  4. Try starting: systemctl --user start openclaw-gateway"
+  2. Check status: sudo systemctl status openclaw-gateway
+  3. Check logs: sudo journalctl -u openclaw-gateway -n 50
+  4. Try starting: sudo systemctl start openclaw-gateway"
 fi
 
 success "Gateway started"

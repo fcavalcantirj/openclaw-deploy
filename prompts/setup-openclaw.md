@@ -244,7 +244,7 @@ Create `/home/openclaw/QUICKREF.md` with:
 openclaw gateway status
 openclaw logs --follow
 openclaw channels status --probe
-systemctl --user status openclaw-gateway
+sudo systemctl status openclaw-gateway
 ```
 
 ## Telegram Bot Setup
@@ -285,7 +285,7 @@ ssh openclaw@<tailscale-ip>
 ```
 cat ~/logs/healthcheck.log
 systemctl --user list-timers
-journalctl --user -u openclaw-gateway -f
+sudo journalctl -u openclaw-gateway -f
 ```
 
 ## Config
@@ -303,7 +303,7 @@ Run these and report the results:
 1. `openclaw --version` — should return a version
 2. `openclaw gateway status` — should show running
 3. `tailscale status` — should show connected (or waiting for auth)
-4. `systemctl --user is-active openclaw-gateway` — should say "active"
+4. `sudo systemctl is-active openclaw-gateway` — should say "active"
 5. `systemctl --user list-timers` — should show openclaw-healthcheck.timer
 6. `ufw status` — should show SSH allowed, everything else denied
 7. `cat ~/.openclaw/openclaw.json` — should show the config (redact any tokens)

@@ -24,5 +24,253 @@
   {"category": "monitoring","description": "Add cron/heartbeat integration to monitor children from parent Claw","passes": true},
   {"category": "recovery","description": "Create resuscitate.sh to recover crashed/unresponsive instances","passes": true},
   {"category": "skill","description": "Create SKILL.md to package this as a proper OpenClaw skill","passes": true},
-  {"category": "documentation","description": "Create comprehensive README with all workflows and examples","passes": true}
+  {"category": "documentation","description": "Create comprehensive README with all workflows and examples","passes": true},
+  {
+    "category": "bugfix",
+    "description": "Fix systemctl --user vs system-level inconsistency — all scripts use systemctl --user but master-setup.sh installs system-level unit at /etc/systemd/system/",
+    "steps": [
+      "Audit all files using systemctl --user: monitor-all.sh, resuscitate.sh, restart.sh, update.sh, status.sh, verify.sh, setup-monitoring.sh, setup-telegram-bot.sh, setup-skills.sh, healthcheck.sh",
+      "Replace systemctl --user with sudo systemctl in all operational scripts",
+      "Update SPEC.md and prompts/setup-openclaw.md documentation to match",
+      "Verify: grep confirms zero remaining systemctl --user in scripts/",
+      "Verify: bash -n passes on all modified scripts"
+    ],
+    "passes": true
+  },
+  {
+    "category": "architecture",
+    "description": "Document AMCP identity crisis — openclaw-deploy creates fake identity.json incompatible with amcp-protocol and proactive-amcp",
+    "steps": [
+      "Study amcp-protocol: real KERI identity with Ed25519 AID, signed checkpoints, BIP-39 recovery",
+      "Study proactive-amcp: watchdog enforcement, tiered resurrection, secrets injection, session repair",
+      "Identify divergence: openclaw-deploy uses sha256(seed) not Ed25519, stores secrets in identity.json, uploads cleartext to IPFS",
+      "Write URGENT-AMCP-IDENTITY-CRISIS.md with full analysis, migration path, and convergence plan",
+      "Verify: document covers all three projects and their integration points"
+    ],
+    "passes": true
+  },
+  {
+    "category": "testing",
+    "description": "Write TDD validation tests for systemctl fix — structural checks only, no gateway interaction",
+    "steps": [
+      "Grep all scripts/ for any remaining systemctl --user references for gateway",
+      "Verify bash -n syntax on every modified script (28/28 pass)",
+      "Verify sudo systemctl pattern is used consistently for gateway ops",
+      "Verify claw CLI (root SSH) still uses bare systemctl (correct)"
+    ],
+    "passes": true
+  },
+  {
+    "category": "integration",
+    "description": "Install amcp-protocol CLI on VM during master-setup.sh",
+    "steps": [
+      "Add npm install -g @amcp/cli step to master-setup.sh after Node 22 installation",
+      "Verify amcp CLI is on PATH: 'amcp --version'",
+      "Make installation idempotent: check if already installed before reinstalling"
+    ],
+    "passes": false
+  },
+  {
+    "category": "integration",
+    "description": "Install proactive-amcp on VM during master-setup.sh",
+    "steps": [
+      "Add proactive-amcp installation step after amcp-protocol CLI is available",
+      "Primary: clawhub install proactive-amcp",
+      "Fallback: git clone from known repo if clawhub unavailable",
+      "Verify proactive-amcp commands are available: 'proactive-amcp --help'"
+    ],
+    "passes": false
+  },
+  {
+    "category": "integration",
+    "description": "Replace fake identity creation with 'amcp identity create'",
+    "steps": [
+      "Remove sha256(seed) identity generation block from master-setup.sh",
+      "Replace with: amcp identity create --out ~/.amcp/identity.json",
+      "Verify identity is valid KERI: amcp identity validate",
+      "Verify: no sha256sum calls remain in identity creation path"
+    ],
+    "passes": false
+  },
+  {
+    "category": "integration",
+    "description": "Replace embedded watchdog (~120 lines in master-setup.sh) with 'proactive-amcp install --watchdog-interval'",
+    "steps": [
+      "Remove embedded watchdog script generation from master-setup.sh",
+      "Remove embedded systemd unit file generation for watchdog",
+      "Replace with: proactive-amcp install --watchdog-interval 120",
+      "Verify watchdog service is running: systemctl status proactive-amcp-watchdog"
+    ],
+    "passes": false
+  },
+  {
+    "category": "integration",
+    "description": "Replace embedded checkpoint (~60 lines in master-setup.sh) with 'proactive-amcp install --checkpoint-schedule'",
+    "steps": [
+      "Remove embedded checkpoint script generation from master-setup.sh",
+      "Remove embedded cron setup for checkpoints",
+      "Replace with: proactive-amcp install --checkpoint-schedule '0 */6 * * *'",
+      "Verify checkpoint cron is active"
+    ],
+    "passes": false
+  },
+  {
+    "category": "integration",
+    "description": "Move secrets to proactive-amcp config — use 'proactive-amcp config set' instead of embedding in identity.json",
+    "steps": [
+      "Remove all jq writes of secrets (pinata_jwt, parent_bot_token) to identity.json",
+      "Replace with: proactive-amcp config set pinata_jwt \"$PINATA_JWT\"",
+      "Replace with: proactive-amcp config set parent_bot_token \"$PARENT_BOT_TOKEN\"",
+      "Verify secrets live in ~/.amcp/config.json, NOT in identity.json"
+    ],
+    "passes": false
+  },
+  {
+    "category": "integration",
+    "description": "Remove ALL direct identity.json mutations from scripts — zero jq writes to identity.json",
+    "steps": [
+      "Audit all files in scripts/ for jq writes to identity.json",
+      "Audit prompts/ and claw CLI for identity.json mutations",
+      "Replace each mutation with appropriate amcp CLI or proactive-amcp command",
+      "Verify: grep -r 'identity.json' scripts/ returns only reads, zero writes"
+    ],
+    "passes": false
+  },
+  {
+    "category": "integration",
+    "description": "Update claw CLI status command to use 'amcp identity validate' instead of raw jq",
+    "steps": [
+      "Find claw CLI status command that reads identity.json with jq",
+      "Replace raw jq .aid read with: amcp identity validate --json",
+      "Parse structured output for display (AID prefix, valid/invalid status)",
+      "Verify: claw status shows identity validation status"
+    ],
+    "passes": false
+  },
+  {
+    "category": "testing",
+    "description": "Verify: grep confirms zero jq.*identity.json writes remaining in scripts/",
+    "steps": [
+      "Run: grep -rn 'jq.*identity.json' scripts/ prompts/ — expect zero write matches",
+      "Run: grep -rn 'identity.json' scripts/ — verify remaining references are reads or documentation only",
+      "Run: grep -rn 'sha256' scripts/ — verify no sha256-based identity generation remains"
+    ],
+    "passes": false
+  },
+  {
+    "category": "testing",
+    "description": "Verify: master-setup.sh is under 300 lines after removing embedded code",
+    "steps": [
+      "Count lines in prompts/setup-openclaw.md (master-setup.sh template)",
+      "Verify line count is under 300 (was ~440, removing ~180 lines of embedded code)",
+      "Verify bash -n passes on the reduced script",
+      "Verify no orphaned variables or references to removed sections"
+    ],
+    "passes": false
+  },
+  {
+    "category": "deploy",
+    "description": "Register child Solvr account during deployment — deterministic protocol-08 naming",
+    "steps": [
+      "Resolve parent name: auto-detect from SOLVR_API_KEY via /v1/me, or require --parent-solvr-name flag",
+      "Build child name: {PARENT_SOLVR_NAME}_child_{INSTANCE_NAME} (validate: lowercase, alphanum+underscore, max 32 chars)",
+      "Call Solvr API: POST /v1/agents/register with computed name, store returned api_key in child config",
+      "Store parentSolvrName in child config at skills.entries.proactive-amcp.config.parentSolvrName",
+      "Verify: child can call GET /v1/me with its own key, name matches pattern"
+    ],
+    "passes": false
+  },
+  {
+    "category": "cli",
+    "description": "Add 'claw diagnose' command — Claude Code runs health checks + searches Solvr",
+    "steps": [
+      "Add diagnose command to claw CLI, SSH to instance with -t for TTY",
+      "Read SOLVR_API_KEY from child config, construct prompt from templates/diagnose-prompt.md",
+      "Claude Code checks: gateway process, port 18789, auth-profiles format, systemd, disk, memory, logs",
+      "For each error: search Solvr, post novel issues as problems",
+      "Return JSON: {checks_passed, checks_failed, errors, solvr_matches}",
+      "Verify: claw diagnose <instance> returns valid JSON with Solvr matches"
+    ],
+    "passes": false
+  },
+  {
+    "category": "cli",
+    "description": "Add 'claw fix' command — Claude Code fixes issues via Solvr, escalates after 3 failures",
+    "steps": [
+      "Add fix command to claw CLI, runs diagnose first internally",
+      "For each issue: search Solvr for solutions, apply fix, update approach status",
+      "If no solution: post problem, try fix, add approach, track attempts (max 3)",
+      "After 3 failures: escalate to parent via Telegram + email",
+      "On success: send summary to parent Telegram (calm tone)",
+      "Verify: Solvr workflow runs end-to-end, escalation fires after 3 failed attempts"
+    ],
+    "passes": false
+  },
+  {
+    "category": "cli",
+    "description": "Add 'claw shell' command — interactive Claude Code session on child instance",
+    "steps": [
+      "Add shell command to claw CLI",
+      "SSH to instance with -t, detect workspace directory, exec claude --dangerously-skip-permissions",
+      "Verify: claw shell <instance> opens interactive Claude Code with workspace access"
+    ],
+    "passes": false
+  },
+  {
+    "category": "template",
+    "description": "Create templates/diagnose-prompt.md for Claude Code health check sessions",
+    "steps": [
+      "Define health checks: gateway, port, auth-profiles, systemd, disk, memory, logs",
+      "Define Solvr workflow: search for each error, post novel issues",
+      "Define output format: JSON with checks_passed, checks_failed, errors, solvr_matches",
+      "Verify: prompt is unambiguous, Claude Code can follow without interpretation"
+    ],
+    "passes": false
+  },
+  {
+    "category": "template",
+    "description": "Create templates/fix-prompt.md for Claude Code fix sessions with Solvr workflow",
+    "steps": [
+      "Input: diagnose JSON output as {{DIAGNOSE_OUTPUT}}",
+      "Define Solvr workflow: search → apply → PATCH approach status, or POST problem → try fix → POST approach",
+      "Define escalation: after 3 failed attempts, send Telegram + email to parent",
+      "Placeholders: DIAGNOSE_OUTPUT, SOLVR_API_KEY, PARENT_TELEGRAM_TOKEN, PARENT_CHAT_ID, INSTANCE_NAME",
+      "Verify: covers all Solvr API calls, escalation is loud and clear"
+    ],
+    "passes": false
+  },
+  {
+    "category": "config",
+    "description": "Store parent config in metadata.json and child OpenClaw config during deploy",
+    "steps": [
+      "Accept flags: --parent-solvr-name, --parent-telegram-token, --parent-chat-id, --parent-email",
+      "Resolve parent name: auto-detect from SOLVR_API_KEY or require flag",
+      "Store in instances/<name>/metadata.json: parent_solvr_name, notification config, ssh_key_path, ip",
+      "Store in child OpenClaw config: skills.entries.proactive-amcp.config.parentSolvrName",
+      "Verify: metadata.json and child config both have parent references after deploy"
+    ],
+    "passes": false
+  },
+  {
+    "category": "lib",
+    "description": "Create scripts/lib/solvr.sh — Solvr API helper functions",
+    "steps": [
+      "Require SOLVR_API_KEY env var",
+      "Functions: solvr_search(query), solvr_post_problem(title, desc, tags), solvr_add_approach(problem_id, angle, method)",
+      "Functions: solvr_update_approach(approach_id, status), solvr_verify_approach(approach_id)",
+      "All use curl with -s -H 'Authorization: Bearer $SOLVR_API_KEY', exit 0/1",
+      "Verify: each function works against Solvr API"
+    ],
+    "passes": false
+  },
+  {
+    "category": "bugfix",
+    "description": "Verify auth-profiles.json format fix (already done)",
+    "steps": [
+      "Check master-setup.sh auth-profiles.json template",
+      "Confirm format: {version:1, profiles:{...}, order:{...}}, each profile has 'type' not 'kind'",
+      "Verify: deployed auth-profiles.json matches template"
+    ],
+    "passes": true
+  }
 ]

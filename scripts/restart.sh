@@ -93,7 +93,7 @@ echo
 # Check current status
 info "Checking current status..."
 CURRENT_STATUS=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-  "openclaw@$IP" "systemctl --user is-active openclaw-gateway 2>&1 || echo 'inactive'")
+  "openclaw@$IP" "sudo systemctl is-active openclaw-gateway 2>&1 || echo 'inactive'")
 
 echo -e "  Current status: ${YELLOW}$CURRENT_STATUS${NC}"
 echo
@@ -101,7 +101,7 @@ echo
 # Stop the gateway
 info "Stopping gateway..."
 STOP_OUTPUT=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-  "openclaw@$IP" "systemctl --user stop openclaw-gateway 2>&1 || echo 'STOP_FAILED'")
+  "openclaw@$IP" "sudo systemctl stop openclaw-gateway 2>&1 || echo 'STOP_FAILED'")
 
 if echo "$STOP_OUTPUT" | grep -qi "STOP_FAILED"; then
   echo -e "${YELLOW}⚠ Warning: Stop command may have failed${NC}"
@@ -117,7 +117,7 @@ sleep 2
 # Start the gateway
 info "Starting gateway..."
 START_OUTPUT=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-  "openclaw@$IP" "systemctl --user start openclaw-gateway 2>&1 || echo 'START_FAILED'")
+  "openclaw@$IP" "sudo systemctl start openclaw-gateway 2>&1 || echo 'START_FAILED'")
 
 if echo "$START_OUTPUT" | grep -qi "START_FAILED"; then
   error "Failed to start gateway:\n$START_OUTPUT"
@@ -133,7 +133,7 @@ sleep 3
 # Verify it's running
 info "Verifying gateway status..."
 NEW_STATUS=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-  "openclaw@$IP" "systemctl --user is-active openclaw-gateway 2>&1 || echo 'inactive'")
+  "openclaw@$IP" "sudo systemctl is-active openclaw-gateway 2>&1 || echo 'inactive'")
 
 if echo "$NEW_STATUS" | grep -qi "active"; then
   success "Gateway is running"
@@ -144,7 +144,7 @@ Troubleshooting:
   1. Check logs: ./scripts/logs.sh $INSTANCE_NAME
   2. Check status: ./scripts/status.sh $INSTANCE_NAME
   3. SSH to instance: ssh -i '$SSH_KEY' openclaw@$IP
-  4. Manual check: systemctl --user status openclaw-gateway"
+  4. Manual check: sudo systemctl status openclaw-gateway"
 fi
 
 echo
@@ -169,7 +169,7 @@ echo
 info "Recent logs (last 10 lines):"
 echo
 ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-  "openclaw@$IP" "journalctl --user -u openclaw-gateway -n 10 --no-pager 2>&1" || echo "Could not fetch logs"
+  "openclaw@$IP" "sudo journalctl -u openclaw-gateway -n 10 --no-pager 2>&1" || echo "Could not fetch logs"
 
 echo
 success "Restart complete!"

@@ -69,7 +69,7 @@ log() {
 }
 
 check_gateway() {
-  if ! systemctl --user is-active openclaw-gateway &>/dev/null; then
+  if ! sudo systemctl is-active openclaw-gateway &>/dev/null; then
     log "ERROR: OpenClaw gateway is not running"
     return 1
   fi

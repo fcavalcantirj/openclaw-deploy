@@ -233,30 +233,30 @@ echo ""
 echo "[5/5] Restarting OpenClaw gateway to apply changes..."
 
 # Restart the gateway service to pick up new configuration
-if systemctl --user is-active openclaw-gateway >/dev/null 2>&1; then
-  systemctl --user restart openclaw-gateway
+if sudo systemctl is-active openclaw-gateway >/dev/null 2>&1; then
+  sudo systemctl restart openclaw-gateway
 
   # Wait a moment for the service to start
   sleep 3
 
   # Check if it's running
-  if systemctl --user is-active openclaw-gateway >/dev/null 2>&1; then
+  if sudo systemctl is-active openclaw-gateway >/dev/null 2>&1; then
     echo "✓ OpenClaw gateway restarted successfully"
   else
     echo "ERROR: Gateway failed to restart"
-    systemctl --user status openclaw-gateway --no-pager || true
+    sudo systemctl status openclaw-gateway --no-pager || true
     exit 1
   fi
 else
   echo "Gateway was not running, starting it..."
-  systemctl --user start openclaw-gateway
+  sudo systemctl start openclaw-gateway
   sleep 3
 
-  if systemctl --user is-active openclaw-gateway >/dev/null 2>&1; then
+  if sudo systemctl is-active openclaw-gateway >/dev/null 2>&1; then
     echo "✓ OpenClaw gateway started successfully"
   else
     echo "ERROR: Gateway failed to start"
-    systemctl --user status openclaw-gateway --no-pager || true
+    sudo systemctl status openclaw-gateway --no-pager || true
     exit 1
   fi
 fi
@@ -295,8 +295,8 @@ if ! ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "openclaw@$IP" "chmod +x $REM
   log_info "Troubleshooting steps:"
   log_info "  1. SSH to the VM: ssh -i $SSH_KEY openclaw@$IP"
   log_info "  2. Check OpenClaw config: cat ~/.openclaw/openclaw.json"
-  log_info "  3. Check gateway status: systemctl --user status openclaw-gateway"
-  log_info "  4. Check gateway logs: journalctl --user -u openclaw-gateway -n 50"
+  log_info "  3. Check gateway status: sudo systemctl status openclaw-gateway"
+  log_info "  4. Check gateway logs: sudo journalctl -u openclaw-gateway -n 50"
   exit 1
 fi
 

@@ -159,7 +159,7 @@ echo
 info "Step 4/5: Restarting OpenClaw gateway..."
 
 RESTART_OUTPUT=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no \
-  "openclaw@$IP" "systemctl --user restart openclaw-gateway && sleep 2 && systemctl --user is-active openclaw-gateway" 2>&1) || {
+  "openclaw@$IP" "sudo systemctl restart openclaw-gateway && sleep 2 && sudo systemctl is-active openclaw-gateway" 2>&1) || {
   warn "Gateway restart may have failed. Output:\n$RESTART_OUTPUT"
 }
 
@@ -191,7 +191,7 @@ echo -e "${BLUE}Next Steps:${NC}"
 echo -e "  1. Share bot username ${GREEN}@${BOT_USERNAME}${NC} with users"
 echo -e "  2. Users should message the bot on Telegram"
 echo -e "  3. Check for pairing requests:"
-echo -e "     ${YELLOW}./scripts/list-pairing-requests.sh ${INSTANCE_NAME}${NC}"
+echo -e "     ${YELLOW}./scripts/approve-user.sh ${INSTANCE_NAME} --list${NC}"
 echo -e "  4. Approve pairing requests:"
 echo -e "     ${YELLOW}./scripts/approve-user.sh ${INSTANCE_NAME} <pairing-code>${NC}"
 echo
@@ -199,7 +199,7 @@ echo -e "${BLUE}Quick Commands:${NC}"
 echo -e "  Check gateway status:"
 echo -e "    ${YELLOW}./scripts/status.sh ${INSTANCE_NAME}${NC}"
 echo -e "  View gateway logs:"
-echo -e "    ${YELLOW}ssh -i ${SSH_KEY} openclaw@${IP} 'journalctl --user -u openclaw-gateway -n 20'${NC}"
+echo -e "    ${YELLOW}ssh -i ${SSH_KEY} openclaw@${IP} 'sudo journalctl -u openclaw-gateway -n 20'${NC}"
 echo -e "  Send test message:"
 echo -e "    ${YELLOW}./scripts/send-message.sh ${INSTANCE_NAME} <user-id> 'Hello!'${NC}"
 echo

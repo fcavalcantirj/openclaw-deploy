@@ -139,7 +139,7 @@ fi
 
 # Systemd service
 echo -n "  Systemd Service:      "
-SYSTEMD_STATUS=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "openclaw@$SERVER_IP" "systemctl --user is-active openclaw-gateway 2>/dev/null || echo 'inactive'" 2>/dev/null)
+SYSTEMD_STATUS=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "openclaw@$SERVER_IP" "sudo systemctl is-active openclaw-gateway 2>/dev/null || echo 'inactive'" 2>/dev/null)
 if [ "$SYSTEMD_STATUS" = "active" ]; then
   print_status "$GREEN" "✓ Active"
 else
@@ -159,7 +159,7 @@ fi
 
 # Healthcheck timer
 echo -n "  Healthcheck Timer:    "
-TIMER_STATUS=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "openclaw@$SERVER_IP" "systemctl --user is-active openclaw-healthcheck.timer 2>/dev/null || echo 'inactive'" 2>/dev/null)
+TIMER_STATUS=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "openclaw@$SERVER_IP" "sudo systemctl is-active openclaw-healthcheck.timer 2>/dev/null || systemctl --user is-active openclaw-healthcheck.timer 2>/dev/null || echo 'inactive'" 2>/dev/null)
 if [ "$TIMER_STATUS" = "active" ]; then
   print_status "$GREEN" "✓ Active"
 else
@@ -199,14 +199,14 @@ fi
 # Recent logs
 echo ""
 echo "Recent Gateway Logs:"
-ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "openclaw@$SERVER_IP" "journalctl --user -u openclaw-gateway -n 5 --no-pager 2>/dev/null || echo '  (no logs available)'" 2>/dev/null | sed 's/^/  /'
+ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "openclaw@$SERVER_IP" "sudo journalctl -u openclaw-gateway -n 5 --no-pager 2>/dev/null || echo '  (no logs available)'" 2>/dev/null | sed 's/^/  /'
 
 echo ""
 print_status "$BLUE" "═══════════════════════════════════════════════════"
 echo ""
 echo "Quick Actions:"
 echo "  SSH to instance:     ssh -i $SSH_KEY openclaw@$SERVER_IP"
-echo "  View full logs:      ssh -i $SSH_KEY openclaw@$SERVER_IP 'journalctl --user -u openclaw-gateway -f'"
+echo "  View full logs:      ssh -i $SSH_KEY openclaw@$SERVER_IP 'sudo journalctl -u openclaw-gateway -f'"
 echo "  Restart gateway:     ssh -i $SSH_KEY openclaw@$SERVER_IP 'openclaw gateway restart'"
 echo "  View QUICKREF:       ssh -i $SSH_KEY openclaw@$SERVER_IP 'cat ~/QUICKREF.md'"
 echo ""

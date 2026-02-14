@@ -30,11 +30,11 @@ else
 fi
 
 # ── Check Systemd Service ─────────────────────────────────────────────────
-if systemctl --user is-active openclaw-gateway &>/dev/null; then
+if sudo systemctl is-active openclaw-gateway &>/dev/null; then
   log "✓ Systemd service active"
 else
   log "⚠ Systemd service not active — starting..."
-  systemctl --user start openclaw-gateway || true
+  sudo systemctl start openclaw-gateway || true
 fi
 
 # ── Check Tailscale ───────────────────────────────────────────────────────

@@ -136,7 +136,7 @@ if [ ! -f "$SSH_KEY" ]; then
 fi
 
 # Build journalctl command
-JOURNAL_CMD="journalctl --user -u $SERVICE --no-pager"
+JOURNAL_CMD="sudo journalctl -u $SERVICE --no-pager"
 
 if [ "$FOLLOW" = true ]; then
   JOURNAL_CMD="$JOURNAL_CMD -f"

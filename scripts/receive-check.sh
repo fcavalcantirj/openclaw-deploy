@@ -178,14 +178,14 @@ if [ "$FOLLOW" = true ]; then
   info "Following gateway logs (Ctrl+C to stop)..."
   echo
   ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-    "openclaw@$IP" "journalctl --user -u openclaw-gateway -f --no-pager"
+    "openclaw@$IP" "sudo journalctl -u openclaw-gateway -f --no-pager"
 else
   info "Recent gateway logs (last $TAIL_LINES entries):"
   echo
 
   # Fetch and format logs
   LOG_OUTPUT=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-    "openclaw@$IP" "journalctl --user -u openclaw-gateway -n $TAIL_LINES --no-pager 2>&1" || echo "LOG_FETCH_FAILED")
+    "openclaw@$IP" "sudo journalctl -u openclaw-gateway -n $TAIL_LINES --no-pager 2>&1" || echo "LOG_FETCH_FAILED")
 
   if [ "$LOG_OUTPUT" = "LOG_FETCH_FAILED" ]; then
     error "Failed to fetch logs from instance"

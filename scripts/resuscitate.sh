@@ -197,7 +197,7 @@ if [ "$FORCE" = false ]; then
   info "Step 3/7: Collecting recent error logs..."
 
   ERROR_LOGS=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-    "openclaw@$IP" "journalctl --user -u openclaw-gateway --since '1 hour ago' -p err --no-pager -n 20 2>&1" || echo "No logs")
+    "openclaw@$IP" "sudo journalctl -u openclaw-gateway --since '1 hour ago' -p err --no-pager -n 20 2>&1" || echo "No logs")
 
   if echo "$ERROR_LOGS" | grep -q "error\|Error\|ERROR"; then
     warning "Recent errors detected:"
@@ -218,7 +218,7 @@ fi
 info "Step 4/7: Checking for stuck processes..."
 
 GATEWAY_STATUS=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-  "openclaw@$IP" "systemctl --user is-active openclaw-gateway 2>&1" || echo "inactive")
+  "openclaw@$IP" "sudo systemctl is-active openclaw-gateway 2>&1" || echo "inactive")
 
 echo -e "  Gateway status: ${CYAN}$GATEWAY_STATUS${NC}"
 
@@ -226,11 +226,11 @@ if [ "$GATEWAY_STATUS" = "active" ] || [ "$GATEWAY_STATUS" = "activating" ]; the
   info "Stopping gateway service..."
   if [ "$DRY_RUN" = false ]; then
     ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-      "openclaw@$IP" "systemctl --user stop openclaw-gateway 2>&1 || true"
+      "openclaw@$IP" "sudo systemctl stop openclaw-gateway 2>&1 || true"
     sleep 2
     success "Gateway stopped"
   else
-    echo "  Would run: systemctl --user stop openclaw-gateway"
+    echo "  Would run: sudo systemctl stop openclaw-gateway"
   fi
 fi
 
@@ -273,14 +273,14 @@ info "Step 6/7: Restarting gateway service..."
 
 if [ "$DRY_RUN" = false ]; then
   ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-    "openclaw@$IP" "systemctl --user start openclaw-gateway 2>&1" || \
+    "openclaw@$IP" "sudo systemctl start openclaw-gateway 2>&1" || \
     warning "Start command may have failed"
 
   sleep 3
 
   success "Gateway restart initiated"
 else
-  echo "  Would run: systemctl --user start openclaw-gateway"
+  echo "  Would run: sudo systemctl start openclaw-gateway"
 fi
 
 echo
@@ -293,7 +293,7 @@ if [ "$DRY_RUN" = false ]; then
 
   # Check service status
   NEW_STATUS=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-    "openclaw@$IP" "systemctl --user is-active openclaw-gateway 2>&1" || echo "inactive")
+    "openclaw@$IP" "sudo systemctl is-active openclaw-gateway 2>&1" || echo "inactive")
 
   echo -e "  Service status: ${CYAN}$NEW_STATUS${NC}"
 
@@ -317,13 +317,13 @@ if [ "$DRY_RUN" = false ]; then
 
   # Check recent logs for errors
   STARTUP_ERRORS=$(ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-    "openclaw@$IP" "journalctl --user -u openclaw-gateway --since '1 minute ago' -p err --no-pager 2>&1 | grep -c '^' || echo 0")
+    "openclaw@$IP" "sudo journalctl -u openclaw-gateway --since '1 minute ago' -p err --no-pager 2>&1 | grep -c '^' || echo 0")
 
   if [ "$STARTUP_ERRORS" -gt 0 ]; then
     warning "$STARTUP_ERRORS error(s) in startup logs"
     echo
     ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-      "openclaw@$IP" "journalctl --user -u openclaw-gateway --since '1 minute ago' -p err --no-pager -n 5 2>&1"
+      "openclaw@$IP" "sudo journalctl -u openclaw-gateway --since '1 minute ago' -p err --no-pager -n 5 2>&1"
   else
     success "No startup errors detected"
   fi

@@ -176,7 +176,7 @@ if [ "$SEND_OUTPUT" != "SEND_FAILED" ] && ! echo "$SEND_OUTPUT" | grep -qi "erro
   echo
   echo -e "${BLUE}Next steps:${NC}"
   echo -e "  • Check instance status: ${YELLOW}./scripts/status.sh $INSTANCE_NAME${NC}"
-  echo -e "  • View gateway logs: ${YELLOW}ssh -i '$SSH_KEY' openclaw@$IP 'journalctl --user -u openclaw-gateway -n 20'${NC}"
+  echo -e "  • View gateway logs: ${YELLOW}ssh -i '$SSH_KEY' openclaw@$IP 'sudo journalctl -u openclaw-gateway -n 20'${NC}"
   echo
   exit 0
 fi
@@ -215,7 +215,7 @@ Troubleshooting:
   1. Check paired users: ./scripts/approve-user.sh $INSTANCE_NAME --list
   2. Check gateway status: ./scripts/status.sh $INSTANCE_NAME
   3. View gateway logs:
-     ssh -i '$SSH_KEY' openclaw@$IP 'journalctl --user -u openclaw-gateway -n 50'
+     ssh -i '$SSH_KEY' openclaw@$IP 'sudo journalctl -u openclaw-gateway -n 50'
 
 Output from attempts:
 $SEND_OUTPUT

@@ -162,7 +162,7 @@ Phase 5: Verification
 1. SSH connectivity
 2. `openclaw --version`
 3. `openclaw gateway status` = running
-4. `systemctl --user is-active openclaw-gateway` = active
+4. `sudo systemctl is-active openclaw-gateway` = active
 5. `tailscale status` = connected
 6. `openclaw channels status` = telegram enabled
 7. Healthcheck timer active

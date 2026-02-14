@@ -144,7 +144,7 @@ check_instance() {
 
   # Check gateway service
   local service_status=$(ssh -i "$ssh_key" -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
-    "openclaw@$ip" "systemctl --user is-active openclaw-gateway 2>&1" || echo "inactive")
+    "openclaw@$ip" "sudo systemctl is-active openclaw-gateway 2>&1" || echo "inactive")
 
   if [ "$service_status" != "active" ]; then
     echo "OFFLINE"
@@ -162,7 +162,7 @@ check_instance() {
 
   # Check for recent errors
   local error_count=$(ssh -i "$ssh_key" -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
-    "openclaw@$ip" "journalctl --user -u openclaw-gateway --since '10 minutes ago' -p err --no-pager 2>&1 | grep -c '^' || echo 0")
+    "openclaw@$ip" "sudo journalctl -u openclaw-gateway --since '10 minutes ago' -p err --no-pager 2>&1 | grep -c '^' || echo 0")
 
   if [ "$error_count" -gt 5 ]; then
     echo "DEGRADED"

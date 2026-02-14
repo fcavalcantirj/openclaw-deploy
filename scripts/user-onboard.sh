@@ -197,7 +197,7 @@ if echo "$PAIRING_LIST" | grep -qi "no pending\|empty\|none found"; then
   echo
   echo -e "${BLUE}Next steps:${NC}"
   echo -e "  1. Ask user to message ${BOT_USERNAME} again"
-  echo -e "  2. Check gateway logs: ${YELLOW}ssh -i $SSH_KEY openclaw@$IP 'journalctl --user -u openclaw-gateway -n 50'${NC}"
+  echo -e "  2. Check gateway logs: ${YELLOW}ssh -i $SSH_KEY openclaw@$IP 'sudo journalctl -u openclaw-gateway -n 50'${NC}"
   echo -e "  3. Verify bot token: ${YELLOW}./scripts/status.sh $INSTANCE_NAME${NC}"
   echo
   exit 1
@@ -266,7 +266,7 @@ echo -e "  • Send message to user:"
 echo -e "    ${YELLOW}./scripts/send-message.sh $INSTANCE_NAME <user-id> 'Welcome!'${NC}"
 echo
 echo -e "  • View gateway logs:"
-echo -e "    ${YELLOW}ssh -i $SSH_KEY openclaw@$IP 'journalctl --user -u openclaw-gateway -f'${NC}"
+echo -e "    ${YELLOW}ssh -i $SSH_KEY openclaw@$IP 'sudo journalctl -u openclaw-gateway -f'${NC}"
 echo
 echo -e "  • List all pairing requests:"
 echo -e "    ${YELLOW}./scripts/approve-user.sh $INSTANCE_NAME --list${NC}"

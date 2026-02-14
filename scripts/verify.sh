@@ -128,7 +128,7 @@ run_check "OpenClaw version" "openclaw --version" "openclaw/"
 run_check "Gateway status" "openclaw gateway status" "running"
 
 # 4. Systemd service active
-run_check "Systemd service" "systemctl --user is-active openclaw-gateway" "active"
+run_check "Systemd service" "sudo systemctl is-active openclaw-gateway" "active"
 
 # 5. Tailscale status = connected
 run_check "Tailscale status" "tailscale status --json | jq -r '.BackendState'" "Running"
@@ -137,7 +137,7 @@ run_check "Tailscale status" "tailscale status --json | jq -r '.BackendState'" "
 run_check "Telegram channel" "openclaw channels status telegram" "enabled"
 
 # 7. Healthcheck timer active
-run_check "Healthcheck timer" "systemctl --user is-active openclaw-healthcheck.timer" "active"
+run_check "Healthcheck timer" "sudo systemctl is-active openclaw-healthcheck.timer 2>/dev/null || systemctl --user is-active openclaw-healthcheck.timer" "active"
 
 # 8. UFW firewall enabled
 run_check "UFW firewall" "sudo ufw status | head -n1" "Status: active"
@@ -216,8 +216,8 @@ cat > "$QUICKREF_FILE" <<'EOF'
 
 - **OpenClaw Version**: OPENCLAW_VERSION_PLACEHOLDER
 - **Gateway**: `openclaw gateway status`
-- **Systemd Service**: `systemctl --user status openclaw-gateway`
-- **Logs**: `journalctl --user -u openclaw-gateway -f`
+- **Systemd Service**: `sudo systemctl status openclaw-gateway`
+- **Logs**: `sudo journalctl -u openclaw-gateway -f`
 
 ## Telegram Bot
 
@@ -227,9 +227,9 @@ cat > "$QUICKREF_FILE" <<'EOF'
 
 ## Monitoring
 
-- **Healthcheck**: `systemctl --user status openclaw-healthcheck.timer`
+- **Healthcheck**: `sudo systemctl status openclaw-healthcheck.timer`
 - **Healthcheck Logs**: `tail -f ~/logs/healthcheck.log`
-- **Next Run**: `systemctl --user list-timers | grep healthcheck`
+- **Next Run**: `sudo systemctl list-timers | grep healthcheck`
 
 ## System Resources
 
@@ -241,7 +241,7 @@ cat > "$QUICKREF_FILE" <<'EOF'
 
 ```bash
 # Restart gateway
-systemctl --user restart openclaw-gateway
+sudo systemctl restart openclaw-gateway
 
 # View configuration
 cat ~/.openclaw/openclaw.json
@@ -258,7 +258,7 @@ sudo ufw status verbose
 
 ## Troubleshooting
 
-- **Gateway won't start**: Check logs with `journalctl --user -u openclaw-gateway -xe`
+- **Gateway won't start**: Check logs with `sudo journalctl -u openclaw-gateway -xe`
 - **Telegram not working**: Verify token in config, check channel status
 - **Tailscale not connected**: Run `tailscale status`, re-authenticate if needed
 - **High memory usage**: Restart gateway, check for stuck processes
