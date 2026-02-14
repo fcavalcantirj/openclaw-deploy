@@ -123,7 +123,7 @@
       "Replace with: proactive-amcp config set parent_bot_token \"$PARENT_BOT_TOKEN\"",
       "Verify secrets live in ~/.amcp/config.json, NOT in identity.json"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "integration",

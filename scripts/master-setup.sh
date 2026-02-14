@@ -192,6 +192,14 @@ main() {
   AMCP_AID=$(amcp identity validate --file "$AMCP_IDENTITY" --json 2>/dev/null | jq -r '.aid // empty')
   log "AMCP AID: ${AMCP_AID:0:20}..."
 
+  # Store secrets in proactive-amcp config (NOT in identity.json)
+  proactive-amcp config set pinata_jwt "$PINATA_JWT" --amcp-dir "$AMCP_DIR" || log "Warning: failed to set pinata_jwt"
+  proactive-amcp config set parent_bot_token "$PARENT_BOT_TOKEN" --amcp-dir "$AMCP_DIR" || log "Warning: failed to set parent_bot_token"
+  proactive-amcp config set parent_chat_id "$PARENT_CHAT_ID" --amcp-dir "$AMCP_DIR" || log "Warning: failed to set parent_chat_id"
+  proactive-amcp config set instance_name "$INSTANCE_NAME" --amcp-dir "$AMCP_DIR" || log "Warning: failed to set instance_name"
+  chown -R openclaw:openclaw "$AMCP_DIR"
+  log "Secrets stored in proactive-amcp config (not identity.json)"
+
   # -------------------------------------------------------------------------
   # Step 8: Configure OpenClaw
   # -------------------------------------------------------------------------

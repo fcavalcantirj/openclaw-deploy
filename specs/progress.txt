@@ -37,3 +37,10 @@
 - Replaced with: `proactive-amcp install --checkpoint-schedule "$CHECKPOINT_CRON"`
 - Kept human-readable interval→cron conversion (case statement)
 - bash -n syntax check passes, file reduced from 432 to 381 lines
+
+## 2026-02-14: Move secrets to proactive-amcp config
+- Added `proactive-amcp config set` calls after AMCP identity creation in Step 7
+- Secrets stored: pinata_jwt, parent_bot_token, parent_chat_id, instance_name
+- All stored in ~/.amcp/config.json via proactive-amcp (not in identity.json)
+- Each call is non-fatal (|| log warning) to avoid blocking deploy on config issues
+- bash -n syntax check passes, file at 389 lines
