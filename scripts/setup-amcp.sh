@@ -179,8 +179,8 @@ case "$AMCP_CLI_STATUS" in
       log_error "SSH in and install Node.js first: claw ssh $INSTANCE_NAME"
       exit 1
     fi
-    log_info "Installing @amcp/cli..."
-    RESULT=$(ssh_exec "$INSTANCE_NAME" "npm install -g @amcp/cli 2>&1 && echo 'INSTALL_OK' || echo 'INSTALL_FAIL'" 2>/dev/null)
+    log_info "Installing amcp-protocol CLI..."
+    RESULT=$(ssh_exec "$INSTANCE_NAME" "npm install -g github:fcavalcantirj/amcp-protocol 2>&1 && echo 'INSTALL_OK' || echo 'INSTALL_FAIL'" 2>/dev/null)
     if echo "$RESULT" | grep -q "INSTALL_OK"; then
       log_success "amcp CLI installed"
     else

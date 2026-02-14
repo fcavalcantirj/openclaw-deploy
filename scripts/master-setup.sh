@@ -99,7 +99,7 @@ main() {
   # -------------------------------------------------------------------------
   notify "Installing amcp-protocol CLI..."
   if ! command -v amcp &>/dev/null; then
-    npm install -g @amcp/cli || fail "amcp-protocol CLI install failed"
+    npm install -g github:fcavalcantirj/amcp-protocol || fail "amcp-protocol CLI install failed"
   fi
   log "AMCP CLI: $(amcp --version 2>/dev/null || echo 'installed')"
 
