@@ -145,7 +145,7 @@
       "Parse structured output for display (AID prefix, valid/invalid status)",
       "Verify: claw status shows identity validation status"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "testing",

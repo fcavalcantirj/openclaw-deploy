@@ -51,3 +51,10 @@
 - scripts/master-setup.sh: identity.json references are only amcp CLI calls (create, validate)
 - claw CLI line 120: read-only jq query (will be updated in next task to use amcp identity validate)
 - grep confirms zero write mutations to identity.json in scripts/
+
+## 2026-02-14: Update claw CLI status to use amcp identity validate
+- Replaced raw `cat identity.json | jq` in claw status command (line 120)
+- Now uses: `amcp identity validate --file ... --json | jq '{aid, valid, status}'`
+- Shows AID prefix (truncated to 20 chars), valid/invalid status from structured output
+- Removed references to .deaths and .last_checkpoint (now managed by proactive-amcp)
+- bash -n syntax check passes

@@ -117,7 +117,7 @@ cmd_status() {
     
     echo ''
     echo '=== AMCP ==='
-    cat /home/openclaw/.amcp/identity.json 2>/dev/null | jq '{aid: .aid[:20], deaths: .deaths, last_checkpoint}' || echo 'No AMCP'
+    amcp identity validate --file /home/openclaw/.amcp/identity.json --json 2>/dev/null | jq '{aid: .aid[:20], valid: .valid, status: .status}' || echo 'No AMCP'
     
     echo ''
     echo '=== Uptime ==='
