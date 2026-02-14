@@ -90,7 +90,7 @@ PROBE=$(ssh_exec "$INSTANCE_NAME" "bash -c '
     echo \"claude:missing\"
   fi
   # Solvr skill
-  if [ -f \"\$HOME/.claude/skills/solvr/scripts/solvr.sh\" ]; then
+  if [ -f \"\$HOME/.claude/skills/solvr/SKILL.md\" ] || [ -d \"\$HOME/.claude/skills/solvr/scripts\" ]; then
     echo \"solvr:ok\"
   else
     echo \"solvr:missing\"
@@ -115,8 +115,10 @@ NEEDS_CLAUDE=false
 NEEDS_SOLVR=false
 
 case "$PAMCP_STATUS" in
-  pamcp:git:*|pamcp:bin:*)
-    log_success "proactive-amcp: ${PAMCP_STATUS#pamcp:*:}" ;;
+  pamcp:git:*)
+    log_success "proactive-amcp: ${PAMCP_STATUS#pamcp:git:}" ;;
+  pamcp:bin:*)
+    log_success "proactive-amcp: ${PAMCP_STATUS#pamcp:bin:}" ;;
   *)
     log_warn "proactive-amcp: Not installed"
     NEEDS_PAMCP=true ;;
@@ -171,11 +173,13 @@ FAILED=0
 
 if [[ "$NEEDS_CLAUDE" = true ]]; then
   log_info "Installing Claude Code CLI..."
-  if ssh_exec "$INSTANCE_NAME" "npm install -g @anthropic-ai/claude-code 2>&1" 2>/dev/null | tail -3; then
+  CLAUDE_RESULT=$(ssh_exec "$INSTANCE_NAME" "npm install -g @anthropic-ai/claude-code 2>&1 && echo 'INSTALL_OK' || echo 'INSTALL_FAIL'" 2>/dev/null)
+  if echo "$CLAUDE_RESULT" | grep -q "INSTALL_OK"; then
     log_success "Claude Code CLI installed"
     INSTALLED=$((INSTALLED + 1))
   else
     log_error "Claude Code CLI install failed"
+    echo "$CLAUDE_RESULT" | tail -5
     FAILED=$((FAILED + 1))
   fi
   echo
@@ -207,18 +211,14 @@ fi
 
 if [[ "$NEEDS_SOLVR" = true ]]; then
   log_info "Installing Solvr skill..."
-  if ssh_exec "$INSTANCE_NAME" "curl -sL --connect-timeout 10 --max-time 30 'https://solvr.dev/install.sh' | bash 2>&1" 2>/dev/null | tail -3; then
-    # Verify it landed
-    SOLVR_VERIFY=$(ssh_exec "$INSTANCE_NAME" "[ -f \$HOME/.claude/skills/solvr/scripts/solvr.sh ] && echo ok || echo missing" 2>/dev/null)
-    if [[ "$SOLVR_VERIFY" = "ok" ]]; then
-      log_success "Solvr skill installed"
-      INSTALLED=$((INSTALLED + 1))
-    else
-      log_error "Solvr skill install script ran but files not found"
-      FAILED=$((FAILED + 1))
-    fi
+  ssh_exec "$INSTANCE_NAME" "curl -sL --connect-timeout 10 --max-time 30 'https://solvr.dev/install.sh' | bash 2>&1" 2>/dev/null || true
+  # Verify it landed (curl|bash exit code is unreliable)
+  SOLVR_VERIFY=$(ssh_exec "$INSTANCE_NAME" "[ -f \$HOME/.claude/skills/solvr/SKILL.md ] || [ -d \$HOME/.claude/skills/solvr/scripts ] && echo ok || echo missing" 2>/dev/null)
+  if [[ "$SOLVR_VERIFY" = "ok" ]]; then
+    log_success "Solvr skill installed"
+    INSTALLED=$((INSTALLED + 1))
   else
-    log_error "Solvr skill install failed"
+    log_error "Solvr skill install failed (files not found after install)"
     FAILED=$((FAILED + 1))
   fi
   echo
