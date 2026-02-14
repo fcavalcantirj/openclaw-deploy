@@ -90,7 +90,7 @@
       "Verify identity is valid KERI: amcp identity validate",
       "Verify: no sha256sum calls remain in identity creation path"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "integration",

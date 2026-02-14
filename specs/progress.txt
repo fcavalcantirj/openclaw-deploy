@@ -13,3 +13,13 @@
 - Idempotent: checks `command -v proactive-amcp` before installing
 - Verifies with `proactive-amcp --help` and logs version
 - bash -n syntax check passes, file at 541 lines (under 800 limit)
+
+## 2026-02-14: Replace fake identity creation with 'amcp identity create'
+- Removed sha256(seed) identity generation from Step 7 of master-setup.sh
+- Removed direct cat > identity.json heredoc that embedded secrets (pinata_jwt, parent_bot_token, etc.)
+- Replaced with: `amcp identity create --seed "$AMCP_SEED" --instance "$INSTANCE_NAME" --out "$AMCP_IDENTITY"`
+- Added validation: `amcp identity validate --file "$AMCP_IDENTITY"` with fail on invalid
+- Idempotent: skips creation if identity already exists and validates
+- Extracts AID from `amcp identity validate --json` for logging
+- grep confirms zero sha256sum calls remain in scripts/
+- bash -n syntax check passes, file still at 541 lines

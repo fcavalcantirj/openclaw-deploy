@@ -167,29 +167,29 @@ main() {
   fi
 
   # -------------------------------------------------------------------------
-  # Step 7: Initialize AMCP identity
+  # Step 7: Initialize AMCP identity (via amcp CLI — real KERI identity)
   # -------------------------------------------------------------------------
   notify "Initializing AMCP..."
   AMCP_DIR="/home/openclaw/.amcp"
   mkdir -p "$AMCP_DIR/checkpoints" "$AMCP_DIR/config-backups"
 
-  # Generate deterministic identity from seed
-  AMCP_AID=$(echo -n "${AMCP_SEED}" | sha256sum | cut -c1-44)
+  AMCP_IDENTITY="$AMCP_DIR/identity.json"
 
-  cat > "$AMCP_DIR/identity.json" << AMCPEOF
-{
-  "aid": "${AMCP_AID}",
-  "instance": "${INSTANCE_NAME}",
-  "created": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "pinata_jwt": "${PINATA_JWT}",
-  "checkpoint_interval": "${CHECKPOINT_INTERVAL}",
-  "parent_bot_token": "${PARENT_BOT_TOKEN}",
-  "parent_chat_id": "${PARENT_CHAT_ID}",
-  "deaths": 0,
-  "last_checkpoint": null
-}
-AMCPEOF
+  # Create real KERI identity via amcp CLI (idempotent — skip if valid identity exists)
+  if [[ -f "$AMCP_IDENTITY" ]] && amcp identity validate --file "$AMCP_IDENTITY" >/dev/null 2>&1; then
+    log "AMCP identity already exists and is valid — skipping creation"
+  else
+    amcp identity create --seed "${AMCP_SEED}" --instance "${INSTANCE_NAME}" --out "$AMCP_IDENTITY" \
+      || fail "amcp identity create failed"
+  fi
+
+  # Validate the identity is proper KERI
+  if ! amcp identity validate --file "$AMCP_IDENTITY"; then
+    fail "AMCP identity validation failed — identity.json is not valid KERI"
+  fi
+
   chown -R openclaw:openclaw "$AMCP_DIR"
+  AMCP_AID=$(amcp identity validate --file "$AMCP_IDENTITY" --json 2>/dev/null | jq -r '.aid // empty')
   log "AMCP AID: ${AMCP_AID:0:20}..."
 
   # -------------------------------------------------------------------------
