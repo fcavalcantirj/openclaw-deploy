@@ -198,7 +198,7 @@ Open an interactive Claude Code session on a child instance.
 SKILL_DIR/claw shell NAME
 ```
 
-Requires `ANTHROPIC_API_KEY` in `SKILL_DIR/instances/credentials.json` or environment. Runs Claude Code with `--dangerously-skip-permissions` in the child's workspace.
+Requires `ANTHROPIC_API_KEY` in `SKILL_DIR/instances/credentials.json` or environment. Opens an interactive Claude Code session in the child's workspace. The user must explicitly request this command.
 
 ### ssh
 

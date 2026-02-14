@@ -13,7 +13,7 @@ triggers:
   - monitor
   - resuscitate
   - claw
-metadata: {"openclaw": {"requires": {"bins": ["hcloud", "jq", "ssh", "curl"], "env": ["HCLOUD_TOKEN"]}, "primaryEnv": "HCLOUD_TOKEN"}}
+metadata: {"openclaw": {"requires": {"bins": ["hcloud", "jq", "ssh", "curl"], "env": ["HCLOUD_TOKEN"], "optionalEnv": ["ANTHROPIC_API_KEY", "SOLVR_API_KEY"]}, "primaryEnv": "HCLOUD_TOKEN"}}
 ---
 
 # openclaw-deploy
@@ -64,6 +64,14 @@ Match the user's intent to the right command. All commands use `SKILL_DIR/claw`.
 When the user says "diagnose" or reports a problem: run `claw diagnose NAME` first, then offer `claw fix NAME` if issues are found.
 
 When the user says "deploy" or "new instance": confirm they have a bot token, then run `claw deploy`.
+
+**Always confirm before destructive or high-impact actions:**
+- `claw destroy` — deletes a VM permanently, always confirm with the user first
+- `claw fix` — modifies child VM state, explain what diagnose found and get approval before running fix
+- `claw deploy` — provisions infrastructure and incurs cost, confirm name/region/token before executing
+- `claw shell` — opens an elevated session on a child VM, only run when the user explicitly requests it
+
+Read-only commands (`list`, `status`, `diagnose`, `logs`) are safe to run without confirmation.
 
 ---
 
@@ -137,7 +145,7 @@ Full flag reference: `SKILL_DIR/references/commands.md`
 
 ---
 
-## Monitoring and Self-Healing
+## Monitoring and Recovery
 
 ### Health Status Levels
 
@@ -150,24 +158,26 @@ Full flag reference: `SKILL_DIR/references/commands.md`
 
 ### Recovery Escalation
 
-Follow this sequence — each step checks before continuing:
+When the user asks to fix an issue, follow this sequence — confirm before each escalation step:
 
 1. `claw restart NAME` — fixes most transient issues
-2. `claw diagnose NAME` — identify the root cause
-3. `claw fix NAME` — auto-fix with Solvr + Claude Code on-VM
-4. After 3 fix failures: auto-escalates to parent Telegram + email
-5. `claw destroy NAME` + `claw deploy` — last resort, fresh instance
+2. `claw diagnose NAME` — identify the root cause (read-only, safe to run)
+3. `claw fix NAME` — applies fixes on-VM via Claude Code (confirm with user first)
+4. After 3 fix failures: notifies parent via Telegram + email
+5. `claw destroy NAME` + `claw deploy` — last resort, always confirm before destroying
 
-### Self-Healing (claw fix)
+### Recovery Details (claw fix)
 
-`claw fix` does:
-1. Runs `claw diagnose` internally
+When the user approves running `claw fix`, it:
+1. Runs `claw diagnose` internally to identify issues
 2. Searches Solvr for existing solutions to each error
 3. Uploads a fix prompt to the child VM
 4. Runs Claude Code on-VM to apply fixes
 5. Reports: fixed count, escalated count
 6. Sends summary to parent Telegram on success
 7. Posts new problems/approaches to Solvr for future agents
+
+All fix actions are scoped to the child VM. The parent machine is not modified.
 
 ---
 
@@ -188,6 +198,33 @@ All paths relative to `SKILL_DIR`:
 
 ---
 
+## Credential Handling
+
+- **`SKILL_DIR/instances/credentials.json`** — shared parent secrets, gitignored, never committed to version control
+- **`SKILL_DIR/instances/*/ssh_key`** — per-instance SSH keys, gitignored, generated locally during deploy
+- **Bot tokens** — provided by the user per-instance, stored only on child VMs
+- **`ANTHROPIC_API_KEY`** — read from credentials.json or environment, passed to child VMs via SSH for `claw shell` and `claw fix` only
+- **`SOLVR_API_KEY`** — optional, used for child Solvr registration during deploy
+
+This skill does NOT store secrets in workspace files, repo files, or SKILL.md. All credential storage uses gitignored paths with restricted permissions.
+
+---
+
+## External Services
+
+This skill contacts the following external services (only when the user runs commands that require them):
+
+| Service | When | What |
+|---------|------|------|
+| Hetzner Cloud API | `claw deploy`, `claw destroy` | VM provisioning via hcloud CLI |
+| Telegram API | `claw deploy`, `claw fix` (escalation) | Bot token validation, parent notifications |
+| Solvr API | `claw deploy`, `claw diagnose`, `claw fix` | Child registration, solution search, problem posting |
+| Child VMs via SSH | Most commands | Remote command execution on managed instances |
+
+No external service is contacted during read-only commands (`claw list`, `claw status`, `claw logs`).
+
+---
+
 ## References
 
 For detailed documentation:
@@ -202,5 +239,5 @@ For detailed documentation:
 
 - `hcloud` CLI with active context (Hetzner API token)
 - `jq`, `ssh`, `curl` installed
-- `SKILL_DIR/instances/credentials.json` with at least `anthropic_api_key` and Telegram credentials
+- `SKILL_DIR/instances/credentials.json` with at least `anthropic_api_key` and Telegram credentials (gitignored, never committed)
 - A Telegram bot token per child instance (from @BotFather)

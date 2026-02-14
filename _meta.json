@@ -5,10 +5,14 @@
     "reads": [
       "SKILL_DIR/instances/*/metadata.json",
       "SKILL_DIR/instances/credentials.json",
-      "SKILL_DIR/templates/openclaw.json"
+      "SKILL_DIR/templates/openclaw.json",
+      "SKILL_DIR/templates/fix-prompt.md",
+      "SKILL_DIR/templates/diagnose-prompt.md",
+      "SKILL_DIR/prompts/*.md"
     ],
     "writes": [
-      "SKILL_DIR/instances/*/metadata.json"
+      "SKILL_DIR/instances/*/metadata.json",
+      "~/.ssh/openclaw_*"
     ]
   }
 }
