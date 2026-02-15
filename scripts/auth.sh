@@ -220,15 +220,15 @@ creds_file = pathlib.Path('$REMOTE_OAUTH_CREDS')
 creds = json.loads(creds_file.read_text())
 if 'claudeAiOauth' in creds: creds = creds['claudeAiOauth']
 
-# Upsert anthropic:oauth profile in auth-profiles.json
+# Upsert anthropic:oauth profile — copy all cred fields so gateway sees scopes/tier
 auth = json.loads(auth_file.read_text()) if auth_file.exists() else {'version': 1, 'profiles': {}, 'order': {}}
-auth['profiles']['anthropic:oauth'] = {
-    'type': 'oauth',
-    'provider': 'anthropic',
-    'accessToken': creds.get('accessToken', creds.get('access_token', '')),
-    'refreshToken': creds.get('refreshToken', creds.get('refresh_token', '')),
-    'expiresAt': creds.get('expiresAt', creds.get('expires_at', ''))
-}
+profile = {'type': 'oauth', 'provider': 'anthropic'}
+profile['accessToken'] = creds.get('accessToken', creds.get('access_token', ''))
+profile['refreshToken'] = creds.get('refreshToken', creds.get('refresh_token', ''))
+profile['expiresAt'] = creds.get('expiresAt', creds.get('expires_at', ''))
+for k in ('scopes', 'subscriptionType', 'rateLimitTier'):
+    if k in creds: profile[k] = creds[k]
+auth['profiles']['anthropic:oauth'] = profile
 auth.setdefault('order', {})['anthropic'] = ['anthropic:oauth', 'anthropic:token']
 # Clear lastGood + usageStats so gateway doesn't auto-override back
 auth.pop('lastGood', None)
