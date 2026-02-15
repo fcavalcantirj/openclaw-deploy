@@ -29,6 +29,10 @@ AMCP_SEED="__AMCP_SEED__"
 CHECKPOINT_INTERVAL="__CHECKPOINT_INTERVAL__"
 CHILD_SOLVR_API_KEY="__CHILD_SOLVR_API_KEY__"
 PARENT_SOLVR_NAME="__PARENT_SOLVR_NAME__"
+DEFAULT_MODEL="__DEFAULT_MODEL__"
+FALLBACK_MODELS="__FALLBACK_MODELS__"
+OPENAI_API_KEY="__OPENAI_API_KEY__"
+SKILLS_LIST="__SKILLS_LIST__"
 
 LOG_FILE="/var/log/openclaw-setup.log"
 CHILD_EMAIL="${INSTANCE_NAME}@agentmail.to"
@@ -385,13 +389,83 @@ SVCEOF
   log "Agent test: ${TEST:0:200}"
 
   # -------------------------------------------------------------------------
-  # Step 13: First checkpoint
+  # Step 13: Configure models + fallbacks
+  # -------------------------------------------------------------------------
+  notify "Configuring models..."
+
+  if [[ -n "$DEFAULT_MODEL" ]]; then
+    su - openclaw -c "openclaw models set '${DEFAULT_MODEL}'" 2>&1 || log "Warning: openclaw models set failed"
+    log "Default model: ${DEFAULT_MODEL}"
+  fi
+
+  if [[ -n "$FALLBACK_MODELS" ]]; then
+    su - openclaw -c "openclaw config set agents.defaults.model.fallbacks '${FALLBACK_MODELS}' --json" 2>&1 || log "Warning: fallback models config failed"
+    log "Fallback models: ${FALLBACK_MODELS}"
+  fi
+
+  # Restart gateway to pick up model config
+  if [[ -n "$DEFAULT_MODEL" || -n "$FALLBACK_MODELS" ]]; then
+    systemctl restart openclaw-gateway
+    sleep 3
+    if ! systemctl is-active --quiet openclaw-gateway; then
+      log "Warning: gateway failed to restart after model config — attempting recovery"
+      systemctl start openclaw-gateway
+      sleep 3
+    fi
+    log "Gateway restarted with model config"
+  fi
+
+  # -------------------------------------------------------------------------
+  # Step 14: Enable provider auth plugins
+  # -------------------------------------------------------------------------
+  notify "Enabling provider plugins..."
+
+  su - openclaw -c "openclaw config set plugins.entries.google-gemini-cli-auth.enabled true" 2>&1 || log "Warning: google-gemini-cli-auth plugin enable failed"
+  su - openclaw -c "openclaw config set plugins.entries.google-antigravity-auth.enabled true" 2>&1 || log "Warning: google-antigravity-auth plugin enable failed"
+
+  if [[ -n "$OPENAI_API_KEY" ]]; then
+    su - openclaw -c "openclaw config set plugins.entries.copilot-proxy.enabled true" 2>&1 || log "Warning: copilot-proxy plugin enable failed"
+    log "Plugins enabled: google-gemini-cli-auth, google-antigravity-auth, copilot-proxy"
+  else
+    log "Plugins enabled: google-gemini-cli-auth, google-antigravity-auth (copilot-proxy skipped — no OpenAI key)"
+  fi
+
+  # -------------------------------------------------------------------------
+  # Step 15: Install skills via ClawdHub
+  # -------------------------------------------------------------------------
+  notify "Installing skills..."
+
+  # Default skills to install
+  if [[ -z "$SKILLS_LIST" ]]; then
+    SKILLS_LIST="gog openai-whisper openai-whisper-api github session-logs proactive-amcp"
+  fi
+
+  for skill in $SKILLS_LIST; do
+    if su - openclaw -c "clawhub install '${skill}'" 2>&1; then
+      log "Skill installed: ${skill}"
+    else
+      log "Warning: skill install failed: ${skill} (non-fatal)"
+    fi
+  done
+
+  # Restart gateway to load plugins + skills
+  systemctl restart openclaw-gateway
+  sleep 3
+  if ! systemctl is-active --quiet openclaw-gateway; then
+    log "Warning: gateway failed to restart after plugins/skills — attempting recovery"
+    systemctl start openclaw-gateway
+    sleep 3
+  fi
+  log "Gateway restarted with plugins and skills"
+
+  # -------------------------------------------------------------------------
+  # Step 16: First checkpoint
   # -------------------------------------------------------------------------
   notify "Creating first checkpoint..."
   proactive-amcp checkpoint --amcp-dir "$AMCP_DIR" || log "First checkpoint failed (non-fatal)"
 
   # -------------------------------------------------------------------------
-  # Step 14: Complete!
+  # Step 17: Complete!
   # -------------------------------------------------------------------------
   ELAPSED=$(( $(date +%s) - SETUP_START ))
   FINAL_MSG="✅ <b>${INSTANCE_NAME}</b> deployed! (${ELAPSED}s)

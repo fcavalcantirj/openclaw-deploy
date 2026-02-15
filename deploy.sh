@@ -56,6 +56,9 @@ ${BOLD}Optional:${NC}
   --type TYPE             Server type (default: cx23)
   --checkpoint-interval   AMCP checkpoint interval (default: 1h)
   --parent-solvr-name NAME  Override parent Solvr agent name (auto-detected from SOLVR_API_KEY)
+  --model MODEL           Default model (default: anthropic/claude-sonnet-4-5-20250929)
+  --fallback-models JSON  Fallback model chain as JSON array
+  --skills LIST           Space-separated skill list to install
   --parent-telegram-token TOKEN  Override parent Telegram bot token
   --parent-chat-id ID     Override parent Telegram chat ID
   --parent-email EMAIL    Override parent notification email
@@ -88,6 +91,9 @@ REGION="nbg1"
 SERVER_TYPE="cx23"
 CHECKPOINT_INTERVAL="1h"
 PARENT_SOLVR_NAME=""
+DEFAULT_MODEL="anthropic/claude-sonnet-4-5-20250929"
+FALLBACK_MODELS='["anthropic/claude-opus-4-6","anthropic/claude-haiku-4-5-20251001"]'
+SKILLS_LIST=""
 FLAG_PARENT_TELEGRAM_TOKEN=""
 FLAG_PARENT_CHAT_ID=""
 FLAG_PARENT_EMAIL=""
@@ -99,6 +105,9 @@ while [[ $# -gt 0 ]]; do
     --region) REGION="$2"; shift 2 ;;
     --type) SERVER_TYPE="$2"; shift 2 ;;
     --checkpoint-interval) CHECKPOINT_INTERVAL="$2"; shift 2 ;;
+    --model) DEFAULT_MODEL="$2"; shift 2 ;;
+    --fallback-models) FALLBACK_MODELS="$2"; shift 2 ;;
+    --skills) SKILLS_LIST="$2"; shift 2 ;;
     --parent-solvr-name) PARENT_SOLVR_NAME="$2"; shift 2 ;;
     --parent-telegram-token) FLAG_PARENT_TELEGRAM_TOKEN="$2"; shift 2 ;;
     --parent-chat-id) FLAG_PARENT_CHAT_ID="$2"; shift 2 ;;
@@ -147,6 +156,7 @@ AGENTMEMORY_API_KEY=$(jq -r '.agentmemory_api_key // empty' "$CREDENTIALS_FILE")
 PINATA_JWT=$(jq -r '.pinata_jwt // empty' "$CREDENTIALS_FILE")
 NOTIFY_EMAIL=$(jq -r '.notify_email // empty' "$CREDENTIALS_FILE")
 SOLVR_API_KEY=$(jq -r '.solvr_api_key // empty' "$CREDENTIALS_FILE")
+OPENAI_API_KEY=$(jq -r '.openai_api_key // empty' "$CREDENTIALS_FILE")
 
 # Apply flag overrides (flags take priority over credentials.json)
 [[ -n "$FLAG_PARENT_TELEGRAM_TOKEN" ]] && PARENT_BOT_TOKEN="$FLAG_PARENT_TELEGRAM_TOKEN"
@@ -349,6 +359,10 @@ sed \
   -e "s|__CHECKPOINT_INTERVAL__|${CHECKPOINT_INTERVAL}|g" \
   -e "s|__CHILD_SOLVR_API_KEY__|${CHILD_SOLVR_API_KEY}|g" \
   -e "s|__PARENT_SOLVR_NAME__|${PARENT_SOLVR_NAME}|g" \
+  -e "s|__DEFAULT_MODEL__|${DEFAULT_MODEL}|g" \
+  -e "s|__FALLBACK_MODELS__|${FALLBACK_MODELS}|g" \
+  -e "s|__OPENAI_API_KEY__|${OPENAI_API_KEY}|g" \
+  -e "s|__SKILLS_LIST__|${SKILLS_LIST}|g" \
   "$SCRIPTS_DIR/master-setup.sh" > "$TEMP_SCRIPT"
 
 scp -i "$SSH_KEY_PATH" $SSH_OPTS "$TEMP_SCRIPT" "root@${INSTANCE_IP}:/root/setup.sh"
@@ -417,6 +431,7 @@ echo -e "  ${BOLD}IP:${NC}        ${INSTANCE_IP}"
 echo -e "  ${BOLD}Region:${NC}    ${REGION}"
 echo -e "  ${BOLD}Bot:${NC}       @${BOT_USERNAME}"
 echo -e "  ${BOLD}Email:${NC}     ${INSTANCE_NAME}@agentmail.to (creating...)"
+echo -e "  ${BOLD}Model:${NC}     ${DEFAULT_MODEL}"
 echo -e "  ${BOLD}AMCP:${NC}      Enabled (checkpoints every ${CHECKPOINT_INTERVAL})"
 if [[ -n "$CHILD_SOLVR_NAME" ]]; then
   echo -e "  ${BOLD}Solvr:${NC}     ${CHILD_SOLVR_NAME}"

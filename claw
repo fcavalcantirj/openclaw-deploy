@@ -24,6 +24,9 @@ ${BOLD}Commands:${NC}
   ${GREEN}message${NC} NAME "text"                    Send message to child
   ${GREEN}logs${NC} NAME [-f]                         View child logs (-f to follow)
   ${GREEN}auth${NC} NAME [--mode oauth|apikey]        Show/switch auth mode
+  ${GREEN}models${NC} NAME [--set MODEL]              Show/set models + fallbacks
+  ${GREEN}plugins${NC} NAME [--enable|--disable ID]   Show/enable/disable plugins
+  ${GREEN}skills${NC} NAME [--install SKILL]           List/install/update skills
   ${GREEN}restart${NC} NAME                           Restart child gateway
   ${GREEN}destroy${NC} NAME                           Destroy child instance
   ${GREEN}diagnose${NC} NAME|self                      Run health checks (14 checks)
@@ -39,6 +42,10 @@ ${BOLD}Examples:${NC}
   claw deploy --name bruce --bot-token "123:ABC..."
   claw auth bruce
   claw auth bruce --mode oauth
+  claw models bruce
+  claw models bruce --set anthropic/claude-opus-4-6
+  claw plugins bruce --enable google-gemini-cli-auth
+  claw skills bruce --install openai-whisper
   claw list
   claw approve bruce 3R7YX6KS
   claw diagnose bruce
@@ -170,6 +177,9 @@ case "$cmd" in
   message)     cmd_message "$@" ;;
   logs)        cmd_logs "$@" ;;
   auth)        "$SCRIPT_DIR/scripts/auth.sh" "$@" ;;
+  models)      "$SCRIPT_DIR/scripts/models.sh" "$@" ;;
+  plugins)     "$SCRIPT_DIR/scripts/plugins.sh" "$@" ;;
+  skills)      "$SCRIPT_DIR/scripts/skills.sh" "$@" ;;
   restart)     "$SCRIPT_DIR/scripts/restart.sh" "$@" ;;
   destroy)     cmd_destroy "$@" ;;
   upgrade)     "$SCRIPT_DIR/scripts/upgrade.sh" "$@" ;;

@@ -224,6 +224,119 @@ case "$SOLVR_LINE" in
   *)            log_error "Check failed"; TOOL_STACK_MISSING=true ;;
 esac
 
+# Full Stack — batch model/auth/plugins/skills/solvr/watchdog in one SSH call
+echo ""
+echo "Full Stack:"
+
+STACK_CHECK=$(ssh_exec "$INSTANCE_NAME" 'bash -c '"'"'
+  # Model config
+  OC_CFG=$HOME/.openclaw/openclaw.json
+  if [ -f "$OC_CFG" ]; then
+    MODEL=$(jq -r ".agents.defaults.model.default // \"\"" "$OC_CFG" 2>/dev/null)
+    FB_CT=$(jq -r ".agents.defaults.model.fallbacks | length" "$OC_CFG" 2>/dev/null || echo 0)
+    echo "model:${MODEL:-not_set}:${FB_CT:-0}"
+  else
+    echo "model:not_set:0"
+  fi
+  # Auth mode
+  AUTH_FILE=$HOME/.openclaw/agents/main/agent/auth-profiles.json
+  if [ -f "$AUTH_FILE" ]; then
+    ACTIVE=$(jq -r ".order.anthropic[0] // \"unknown\"" "$AUTH_FILE" 2>/dev/null)
+    echo "auth:${ACTIVE:-unknown}"
+  else
+    echo "auth:unknown"
+  fi
+  # Plugins
+  PCOUNT=$(openclaw plugins list 2>/dev/null | grep -c "loaded\|enabled" || echo 0)
+  PTOTAL=$(openclaw plugins list 2>/dev/null | wc -l || echo 0)
+  echo "plugins:${PCOUNT}:${PTOTAL}"
+  # Skills
+  SCOUNT=$(openclaw skills list 2>/dev/null | grep -c "ready\|active" || echo 0)
+  STOTAL=$(openclaw skills list 2>/dev/null | wc -l || echo 0)
+  echo "skills:${SCOUNT}:${STOTAL}"
+  # Solvr
+  if command -v proactive-amcp &>/dev/null; then
+    SKEY=$(proactive-amcp config get solvr_api_key 2>/dev/null || echo "")
+    if [ -n "$SKEY" ] && [ "$SKEY" != "null" ]; then
+      echo "solvr:registered"
+    else
+      echo "solvr:not_registered"
+    fi
+  else
+    echo "solvr:unknown"
+  fi
+  # Watchdog
+  if systemctl is-active --quiet proactive-amcp-watchdog.timer 2>/dev/null; then
+    echo "watchdog:active"
+  elif [ -f /etc/cron.d/proactive-amcp-watchdog ]; then
+    echo "watchdog:cron"
+  else
+    echo "watchdog:inactive"
+  fi
+'"'"'' 2>/dev/null || echo "model:error:0
+auth:error
+plugins:0:0
+skills:0:0
+solvr:error
+watchdog:error")
+
+# Parse stack results
+MODEL_LINE=$(echo "$STACK_CHECK" | grep '^model:')
+AUTH_LINE=$(echo "$STACK_CHECK" | grep '^auth:')
+PLUGINS_LINE=$(echo "$STACK_CHECK" | grep '^plugins:')
+SKILLS_LINE=$(echo "$STACK_CHECK" | grep '^skills:')
+SOLVR_STATUS_LINE=$(echo "$STACK_CHECK" | grep '^solvr:')
+WATCHDOG_LINE=$(echo "$STACK_CHECK" | grep '^watchdog:')
+
+# Model
+MODEL_NAME=$(echo "$MODEL_LINE" | cut -d: -f2)
+MODEL_FB=$(echo "$MODEL_LINE" | cut -d: -f3)
+echo -n "  Default Model:        "
+if [[ -n "$MODEL_NAME" && "$MODEL_NAME" != "not_set" && "$MODEL_NAME" != "error" ]]; then
+  log_success "$MODEL_NAME (+${MODEL_FB} fallbacks)"
+else
+  log_warn "Not set"
+fi
+
+# Auth
+AUTH_PROFILE=$(echo "$AUTH_LINE" | cut -d: -f2-)
+echo -n "  Auth Profile:         "
+if [[ "$AUTH_PROFILE" == *"oauth"* ]]; then
+  log_success "$AUTH_PROFILE"
+elif [[ "$AUTH_PROFILE" == *"token"* ]]; then
+  log_success "$AUTH_PROFILE"
+else
+  log_warn "$AUTH_PROFILE"
+fi
+
+# Plugins
+P_LOADED=$(echo "$PLUGINS_LINE" | cut -d: -f2)
+P_TOTAL=$(echo "$PLUGINS_LINE" | cut -d: -f3)
+echo -n "  Plugins:              "
+log_success "${P_LOADED}/${P_TOTAL} loaded"
+
+# Skills
+S_READY=$(echo "$SKILLS_LINE" | cut -d: -f2)
+S_TOTAL=$(echo "$SKILLS_LINE" | cut -d: -f3)
+echo -n "  Skills:               "
+log_success "${S_READY}/${S_TOTAL} ready"
+
+# Solvr
+SOLVR_ST=$(echo "$SOLVR_STATUS_LINE" | cut -d: -f2)
+echo -n "  Solvr:                "
+case "$SOLVR_ST" in
+  registered) log_success "Registered" ;;
+  *)          log_warn "Not registered" ;;
+esac
+
+# Watchdog
+WD_ST=$(echo "$WATCHDOG_LINE" | cut -d: -f2)
+echo -n "  Watchdog:             "
+case "$WD_ST" in
+  active|cron) log_success "Active ($WD_ST)" ;;
+  *)           log_warn "Inactive" ;;
+esac
+
 # Recent logs
 echo ""
 echo "Recent Gateway Logs:"

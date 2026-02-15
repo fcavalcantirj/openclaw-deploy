@@ -164,3 +164,76 @@
 - claw fix reads these fields from metadata for escalation notifications
 - master-setup.sh already stores parentSolvrName in child OpenClaw config (plugins.entries.proactive-amcp.config)
 - deploy.sh: 429 lines (under 800 limit), bash -n syntax check passes
+
+## 2026-02-15: Mark already-complete tasks as passes: true
+- SSH user fix: list.sh, status.sh, monitor-all.sh, restart.sh already use lib/common.sh with ssh_exec/ssh_check
+- restart.sh JSON field fix: already refactored to use load_instance() — no direct jq .ssh_key read
+- import.sh: already exists (163 lines), validates args, creates metadata, probes SSH/gateway
+- lib/common.sh migration: all 4 scripts already source common.sh, use INSTANCE_SSH_USER
+- All 4 scripts pass bash -n, zero openclaw@ references in list/status/monitor-all/restart
+- dana metadata already has ssh_user: root
+
+## 2026-02-15: Configure Anthropic models + fallbacks during deploy
+- Added DEFAULT_MODEL and FALLBACK_MODELS template vars to master-setup.sh
+- Added Step 13 to master-setup.sh: configure models via openclaw models set + config set fallbacks
+- Default: anthropic/claude-sonnet-4-5-20250929
+- Fallbacks: ["anthropic/claude-opus-4-6","anthropic/claude-haiku-4-5-20251001"]
+- Gateway restarts after model config to pick up changes
+- Added --model and --fallback-models flags to deploy.sh
+- Added sed substitution for __DEFAULT_MODEL__ and __FALLBACK_MODELS__ in deploy.sh
+- Model info shown in deploy summary output
+- master-setup.sh: 445 lines, deploy.sh: 438 lines (both under 800)
+- bash -n syntax check passes on both files
+
+## 2026-02-15: Install OpenClaw provider auth plugins during deploy
+- Added Step 14 to master-setup.sh: enable google-gemini-cli-auth + google-antigravity-auth plugins
+- copilot-proxy enabled only when OPENAI_API_KEY is set
+- Added OPENAI_API_KEY template var to master-setup.sh, loaded from credentials.json in deploy.sh
+- Gateway restarts after plugin/skill config
+
+## 2026-02-15: Install skills via ClawdHub during deploy
+- Added Step 15 to master-setup.sh: install skills via clawhub install
+- Default skills: gog, openai-whisper, openai-whisper-api, github, session-logs, proactive-amcp
+- Added --skills flag to deploy.sh to override default skill list
+- Added SKILLS_LIST template var + sed substitution
+- master-setup.sh: 490 lines, deploy.sh: 444 lines (both under 800)
+- bash -n syntax check passes on both files
+
+## 2026-02-15: Add claw models/plugins/skills commands
+- Created scripts/models.sh (202 lines): show, --set MODEL, --fallbacks JSON
+  - Reads config via python3, shows openclaw models output
+  - Sets model via openclaw models set, restarts gateway
+- Created scripts/plugins.sh (154 lines): show, --enable ID, --disable ID
+  - Lists via openclaw plugins list, enables/disables via config set
+- Created scripts/skills.sh (140 lines): show, --install SKILL, --update
+  - Lists via openclaw skills list, installs via clawhub install
+- Added models/plugins/skills routes to claw CLI dispatcher + help + examples
+- All scripts follow auth.sh pattern: source common.sh, load_instance, ssh_check
+- bash -n syntax check passes on all 4 files (models, plugins, skills, claw)
+
+## 2026-02-15: Enhance claw diagnose with full stack checks (19 total)
+- Added 5 new remote probe checks to diagnose-remote.sh:
+  - model_config: reads default model + fallback count from openclaw.json
+  - plugins: counts loaded/enabled plugins via openclaw plugins list
+  - skills: counts ready/active skills via openclaw skills list
+  - solvr: checks solvr_api_key in proactive-amcp config
+  - watchdog: checks systemd timer or cron file for watchdog
+- Added parsing + record() calls for all 5 new checks
+- Added "Stack:" section to human-readable output (model, plugins, skills, Solvr)
+- Added watchdog to AMCP section in human-readable output
+- Updated JSON output to include all 19 checks
+- Updated usage help: 14 checks → 19 checks
+- diagnose-remote.sh: 736 lines (under 800), bash -n passes
+
+## 2026-02-15: Enhance claw status with full stack summary
+- Added "Full Stack:" section to status.sh using batched SSH call
+- Shows: Default Model, Auth Profile, Plugins (loaded/total), Skills (ready/total), Solvr, Watchdog
+- Uses jq instead of python3 for model/auth JSON parsing (simpler quoting)
+- status.sh: 356 lines (under 800), bash -n passes
+
+## 2026-02-15: Verify CLI fixes end-to-end (structural)
+- All 4 operational scripts (list, status, monitor-all, restart): zero openclaw@ references
+- All 4 source lib/common.sh and use ssh_exec/ssh_check
+- All 3 instances (dana, bruce-russo, jack) have ssh_user in metadata
+- bash -n passes on all scripts
+- clawd-bruv-ubuntu not imported (no SSH key available)

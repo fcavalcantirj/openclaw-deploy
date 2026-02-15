@@ -23,20 +23,20 @@ Usage: $(basename "$0") NAME|self [--json]
 Run comprehensive health diagnostics on a child instance or locally.
 
 Arguments:
-  NAME    Instance name to diagnose remotely (14 checks)
+  NAME    Instance name to diagnose remotely (19 checks)
   self    Run proactive-amcp diagnose locally
 
 Options:
   --json  Machine-consumable JSON output
 
 Checks performed:
-  1. SSH connectivity        8. Claude Code CLI
-  2. Gateway process         9. Claude Code auth (OAuth)
-  3. Health endpoint        10. Anthropic API key
-  4. Session corruption     11. User mismatch detection
-  5. Config JSON validity   12. AMCP identity
-  6. Disk space             13. AMCP config completeness
-  7. Memory                 14. Last checkpoint age
+  1. SSH connectivity        8. Claude Code CLI       15. Plugins
+  2. Gateway process         9. Claude Code auth      16. Skills
+  3. Health endpoint        10. Anthropic API key     17. Solvr registration
+  4. Session corruption     11. User mismatch        18. Watchdog
+  5. Config JSON validity   12. AMCP identity        19. Last checkpoint
+  6. Disk space             13. AMCP config
+  7. Memory                 14. Model config
 
 EOF
   exit 1
@@ -364,6 +364,57 @@ else
   echo "warn:no_pamcp_or_config"
 fi
 
+# ── Model config ────────────────────────────────────────────────────────
+echo "${SEP}model_config"
+OC_CONFIG="${HOME}/.openclaw/openclaw.json"
+if [[ -f "$OC_CONFIG" ]]; then
+  python3 -c "
+import json
+with open('${OC_CONFIG}') as f:
+  cfg = json.load(f)
+model = cfg.get('agents',{}).get('defaults',{}).get('model',{})
+default = model.get('default','')
+fallbacks = model.get('fallbacks',[])
+print(f'{default}:{len(fallbacks)}')
+" 2>/dev/null || echo "error:parse"
+else
+  echo "error:no_config"
+fi
+
+# ── Plugin check ────────────────────────────────────────────────────────
+echo "${SEP}plugins"
+LOADED=$(openclaw plugins list 2>/dev/null | grep -c "loaded\|enabled" || echo 0)
+TOTAL_P=$(openclaw plugins list 2>/dev/null | wc -l || echo 0)
+echo "${LOADED}:${TOTAL_P}"
+
+# ── Skill check ─────────────────────────────────────────────────────────
+echo "${SEP}skills"
+READY=$(openclaw skills list 2>/dev/null | grep -c "ready\|active" || echo 0)
+TOTAL_S=$(openclaw skills list 2>/dev/null | wc -l || echo 0)
+echo "${READY}:${TOTAL_S}"
+
+# ── Solvr registration ─────────────────────────────────────────────────
+echo "${SEP}solvr"
+SOLVR_KEY=""
+if command -v proactive-amcp &>/dev/null; then
+  SOLVR_KEY=$(proactive-amcp config get solvr_api_key 2>/dev/null || echo "")
+fi
+if [[ -n "$SOLVR_KEY" && "$SOLVR_KEY" != "null" ]]; then
+  echo "ok:${SOLVR_KEY:0:8}..."
+else
+  echo "warn:no_key"
+fi
+
+# ── Watchdog status ─────────────────────────────────────────────────────
+echo "${SEP}watchdog"
+if systemctl is-active --quiet proactive-amcp-watchdog.timer 2>/dev/null; then
+  echo "ok:systemd"
+elif [[ -f /etc/cron.d/proactive-amcp-watchdog ]]; then
+  echo "ok:cron"
+else
+  echo "warn:not_found"
+fi
+
 # ── Last checkpoint ──────────────────────────────────────────────────────
 echo "${SEP}last_checkpoint"
 CKPT_FILE="${HOME}/.amcp/last-checkpoint.json"
@@ -539,12 +590,60 @@ case "$ckpt" in
     ;;
 esac
 
+# Check 14: Model config
+model_raw=$(parse_field "model_config")
+model_default="${model_raw%%:*}"
+model_fallback_count="${model_raw##*:}"
+if [[ -n "$model_default" && "$model_default" != "error" ]]; then
+  record "model_config" "ok" "${model_default} (+${model_fallback_count} fallbacks)"
+elif [[ "$model_default" == "error" ]]; then
+  record "model_config" "warn" "Cannot read model config"
+else
+  record "model_config" "warn" "No default model set"
+fi
+
+# Check 15: Plugins
+plugins_raw=$(parse_field "plugins")
+plugins_loaded="${plugins_raw%%:*}"
+plugins_total="${plugins_raw##*:}"
+[[ "$plugins_loaded" =~ ^[0-9]+$ ]] || plugins_loaded=0
+if [[ "$plugins_loaded" -gt 0 ]]; then
+  record "plugins" "ok" "${plugins_loaded}/${plugins_total} loaded"
+else
+  record "plugins" "warn" "No plugins loaded"
+fi
+
+# Check 16: Skills
+skills_raw=$(parse_field "skills")
+skills_ready="${skills_raw%%:*}"
+skills_total="${skills_raw##*:}"
+[[ "$skills_ready" =~ ^[0-9]+$ ]] || skills_ready=0
+if [[ "$skills_ready" -gt 0 ]]; then
+  record "skills" "ok" "${skills_ready}/${skills_total} ready"
+else
+  record "skills" "warn" "No skills ready"
+fi
+
+# Check 17: Solvr registration
+solvr_raw=$(parse_field "solvr")
+case "$solvr_raw" in
+  ok:*)   record "solvr" "ok" "Registered (${solvr_raw#ok:})" ;;
+  *)      record "solvr" "warn" "Not registered" ;;
+esac
+
+# Check 18: Watchdog
+watchdog_raw=$(parse_field "watchdog")
+case "$watchdog_raw" in
+  ok:*)   record "watchdog" "ok" "Active (${watchdog_raw#ok:})" ;;
+  *)      record "watchdog" "warn" "Not running" ;;
+esac
+
 # ── Output ───────────────────────────────────────────────────────────────────
 
 if [[ "$OUTPUT_JSON" == true ]]; then
   # Build JSON output (backward compatible with claw fix expectations)
   checks_json="{"
-  for name in ssh gateway health sessions config_json disk memory claude_cli claude_auth api_key user_mismatch amcp_identity amcp_config checkpoint; do
+  for name in ssh gateway health sessions config_json disk memory claude_cli claude_auth api_key user_mismatch amcp_identity amcp_config checkpoint model_config plugins skills solvr watchdog; do
     status="${CHECK_STATUS[$name]:-unknown}"
     detail="${CHECK_DETAIL[$name]:-}"
     # Escape for JSON
@@ -606,9 +705,17 @@ else
   printf "  %-22s %s %s\n" "User Mismatch:" "$(indicator "${CHECK_STATUS[user_mismatch]}")" "${CHECK_DETAIL[user_mismatch]}"
   echo
 
+  echo "Stack:"
+  printf "  %-22s %s %s\n" "Model:" "$(indicator "${CHECK_STATUS[model_config]}")" "${CHECK_DETAIL[model_config]}"
+  printf "  %-22s %s %s\n" "Plugins:" "$(indicator "${CHECK_STATUS[plugins]}")" "${CHECK_DETAIL[plugins]}"
+  printf "  %-22s %s %s\n" "Skills:" "$(indicator "${CHECK_STATUS[skills]}")" "${CHECK_DETAIL[skills]}"
+  printf "  %-22s %s %s\n" "Solvr:" "$(indicator "${CHECK_STATUS[solvr]}")" "${CHECK_DETAIL[solvr]}"
+  echo
+
   echo "AMCP:"
   printf "  %-22s %s %s\n" "Identity:" "$(indicator "${CHECK_STATUS[amcp_identity]}")" "${CHECK_DETAIL[amcp_identity]}"
   printf "  %-22s %s %s\n" "Config:" "$(indicator "${CHECK_STATUS[amcp_config]}")" "${CHECK_DETAIL[amcp_config]}"
+  printf "  %-22s %s %s\n" "Watchdog:" "$(indicator "${CHECK_STATUS[watchdog]}")" "${CHECK_DETAIL[watchdog]}"
   printf "  %-22s %s %s\n" "Last Checkpoint:" "$(indicator "${CHECK_STATUS[checkpoint]}")" "${CHECK_DETAIL[checkpoint]}"
   echo
 

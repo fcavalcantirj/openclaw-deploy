@@ -434,7 +434,7 @@
       "Verify: list.sh shows dana as 'online' not 'offline'",
       "Verify: grep -rn 'openclaw@' scripts/ returns zero matches in operational scripts (only docs/comments)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "bugfix",
@@ -446,7 +446,7 @@
       "Verify: ./scripts/restart.sh dana does not print 'SSH key not found at null'",
       "Verify: bash -n passes on modified restart.sh"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "management",
@@ -463,7 +463,7 @@
       "Verify: ./scripts/list.sh shows imported instance after import",
       "Verify: bash -n passes on import.sh"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "bugfix",
@@ -477,7 +477,7 @@
       "Verify: grep -c 'source.*common.sh' scripts/{list,status,monitor-all,restart}.sh returns 4 (all source it)",
       "Verify: bash -n passes on all four modified scripts"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "cli",
@@ -508,7 +508,7 @@
       "Verify: openclaw models on child shows correct default + 2 fallbacks",
       "Verify: gateway log shows 'agent model: anthropic/claude-sonnet-4-5-20250929' on startup"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "deploy",
@@ -521,7 +521,7 @@
       "Verify: openclaw plugins list shows provider plugins as loaded",
       "Verify: openclaw models auth login --provider lists available providers"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "deploy",
@@ -537,7 +537,7 @@
       "Verify: openclaw skills list shows all target skills as ready",
       "Verify: each skill's required CLI dependency is on PATH (gog, whisper, gh)"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "deploy",
@@ -552,7 +552,7 @@
       "Verify: proactive-amcp config get solvr.apiKey returns valid key",
       "Verify: systemctl status proactive-amcp-watchdog shows active"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "cli",
@@ -566,7 +566,7 @@
       "Create test/models.bats: usage, show, set model, set fallbacks, SSH failure",
       "Verify: claw models jack shows anthropic/claude-sonnet-4-5-20250929 + 2 fallbacks"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "cli",
@@ -579,7 +579,7 @@
       "Add plugins route to claw CLI dispatcher",
       "Verify: claw plugins jack lists all 36 plugins with load status"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "cli",
@@ -592,7 +592,7 @@
       "Add skills route to claw CLI dispatcher",
       "Verify: claw skills jack --install openai-whisper installs and shows ready"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "cli",
@@ -606,7 +606,7 @@
       "Report each as pass/warn/fail in diagnose JSON output",
       "Verify: claw diagnose jack reports model, plugin, skill, and Solvr status"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "cli",
@@ -620,7 +620,7 @@
       "Add AMCP line: watchdog status + last checkpoint age",
       "Verify: claw status jack shows full stack overview in one screen"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "testing",
@@ -633,6 +633,6 @@
       "Verify: ./scripts/monitor-all.sh reports correct health status for all instances",
       "Verify: grep confirms zero hardcoded 'openclaw@' in operational scripts"
     ],
-    "passes": false
+    "passes": true
   }
 ]
