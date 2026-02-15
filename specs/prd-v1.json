@@ -376,6 +376,51 @@
     "passes": false
   },
   {
+    "category": "cli",
+    "description": "Add 'claw auth' command — show/switch auth mode (API key vs OAuth) on child instances",
+    "steps": [
+      "Create scripts/auth.sh: show current auth profile, switch to OAuth or API key",
+      "Show mode: SSH to child, read auth-profiles.json + sessions.json + ~/.claude/.credentials.json, display active profile, fallback order, OAuth expiry",
+      "Switch to OAuth (--mode oauth): verify .credentials.json exists, unwrap nested claudeAiOauth key, upsert anthropic:oauth profile in auth-profiles.json, patch all sessions' authProfileOverride, restart gateway",
+      "Switch to API key (--mode apikey): set auth-profiles.json order to [token, oauth], patch all sessions' authProfileOverride to anthropic:token, restart gateway",
+      "Dynamic service user detection: detect openclaw home via getent passwd, fallback find /home -name .openclaw",
+      "Gateway restart: sudo systemctl restart, fallback pkill + nohup openclaw gateway",
+      "Add auth route to claw CLI dispatcher + help text",
+      "Create test/auth.bats with 15 tests: usage, show, oauth switch, apikey switch, missing creds, SSH failure",
+      "Verify: claw auth <name> shows active profile, claw auth <name> --mode oauth switches and restarts"
+    ],
+    "passes": true
+  },
+  {
+    "category": "deploy",
+    "description": "Configure model + fallbacks during deploy — set default model to Sonnet, fallback to Opus then Haiku via openclaw CLI",
+    "steps": [
+      "Add model configuration step to master-setup.sh after gateway is running",
+      "Set default model: openclaw models set anthropic/claude-sonnet-4-5-20250929",
+      "Set fallback chain: openclaw config set agents.defaults.model.fallbacks '[\"anthropic/claude-opus-4-6\",\"anthropic/claude-haiku-4-5-20251001\"]' --json",
+      "Accept optional --model flag in deploy.sh to override default model",
+      "Accept optional --fallback-models flag in deploy.sh to override fallback chain",
+      "Restart gateway after model config to apply changes",
+      "Verify: openclaw models on deployed child shows correct default + 2 fallbacks",
+      "Verify: gateway log shows configured model on startup"
+    ],
+    "passes": false
+  },
+  {
+    "category": "cli",
+    "description": "Add 'claw models' command — show/set models and fallbacks on child instances",
+    "steps": [
+      "Create scripts/models.sh: show current model config, set default model, set fallbacks",
+      "Show mode (claw models <name>): SSH to child, run openclaw models, display default + fallbacks + auth overview",
+      "Set default (claw models <name> --set <model>): SSH to child, run openclaw models set <model>, restart gateway",
+      "Set fallbacks (claw models <name> --fallbacks '<json array>'): SSH to child, openclaw config set agents.defaults.model.fallbacks, restart gateway",
+      "Add models route to claw CLI dispatcher + help text",
+      "Create test/models.bats with tests: usage, show, set model, set fallbacks, SSH failure",
+      "Verify: claw models <name> shows current config, claw models <name> --set anthropic/claude-sonnet-4-5-20250929 switches model"
+    ],
+    "passes": false
+  },
+  {
     "category": "testing",
     "description": "Verify CLI fixes end-to-end: all 4 servers reachable, list/status/restart/monitor work correctly",
     "steps": [

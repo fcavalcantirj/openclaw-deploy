@@ -115,13 +115,12 @@ EOSSH
 echo "ssh $*" >> "${TEST_DIR}/ssh.log"
 CMD="$*"
 if echo "$CMD" | grep -q "echo ok"; then echo "ok"; exit 0; fi
-# Check for credentials file existence
 if echo "$CMD" | grep -q "test -f.*credentials"; then echo "exists"; exit 0; fi
-# The python3 patch command
 if echo "$CMD" | grep -q "python3 -c"; then echo "ok"; exit 0; fi
-# Gateway restart
-if echo "$CMD" | grep -q "systemctl restart\|pkill"; then echo "ok"; exit 0; fi
-if echo "$CMD" | grep -q "systemctl is-active"; then echo "active"; exit 0; fi
+if echo "$CMD" | grep -q "systemctl restart"; then exit 1; fi
+if echo "$CMD" | grep -q "pkill"; then exit 0; fi
+if echo "$CMD" | grep -q "nohup.*openclaw"; then echo "started-999"; exit 0; fi
+if echo "$CMD" | grep -q "pgrep -c"; then echo "1"; exit 0; fi
 echo "ok"; exit 0
 EOSSH
   chmod +x "$MOCK_BIN/ssh"
@@ -159,9 +158,10 @@ CMD="$*"
 if echo "$CMD" | grep -q "echo ok"; then echo "ok"; exit 0; fi
 if echo "$CMD" | grep -q "test -f.*credentials"; then echo "exists"; exit 0; fi
 if echo "$CMD" | grep -q "python3 -c"; then echo "ok"; exit 0; fi
-if echo "$CMD" | grep -q "systemctl restart\|pkill"; then echo "ok"; exit 0; fi
-if echo "$CMD" | grep -q "systemctl is-active"; then echo "active"; exit 0; fi
-if echo "$CMD" | grep -q "journalctl"; then echo "gateway started"; exit 0; fi
+if echo "$CMD" | grep -q "systemctl restart"; then exit 1; fi
+if echo "$CMD" | grep -q "pkill"; then exit 0; fi
+if echo "$CMD" | grep -q "nohup.*openclaw"; then echo "started-999"; exit 0; fi
+if echo "$CMD" | grep -q "pgrep -c"; then echo "1"; exit 0; fi
 echo "ok"; exit 0
 EOSSH
   chmod +x "$MOCK_BIN/ssh"
@@ -169,8 +169,9 @@ EOSSH
   run "$SCRIPT" jack --mode oauth
   [ "$status" -eq 0 ]
 
-  # Verify restart happened
-  grep -q "systemctl" "$TEST_DIR/ssh.log" || grep -q "pkill" "$TEST_DIR/ssh.log"
+  # Verify restart happened (pkill + nohup fallback)
+  grep -q "pkill" "$TEST_DIR/ssh.log"
+  grep -q "nohup" "$TEST_DIR/ssh.log"
 }
 
 # ── Switch to API key (--mode apikey) ───────────────────────────────────────
@@ -182,8 +183,10 @@ echo "ssh $*" >> "${TEST_DIR}/ssh.log"
 CMD="$*"
 if echo "$CMD" | grep -q "echo ok"; then echo "ok"; exit 0; fi
 if echo "$CMD" | grep -q "python3 -c"; then echo "ok"; exit 0; fi
-if echo "$CMD" | grep -q "systemctl restart\|pkill"; then echo "ok"; exit 0; fi
-if echo "$CMD" | grep -q "systemctl is-active"; then echo "active"; exit 0; fi
+if echo "$CMD" | grep -q "systemctl restart"; then exit 1; fi
+if echo "$CMD" | grep -q "pkill"; then exit 0; fi
+if echo "$CMD" | grep -q "nohup.*openclaw"; then echo "started-999"; exit 0; fi
+if echo "$CMD" | grep -q "pgrep -c"; then echo "1"; exit 0; fi
 echo "ok"; exit 0
 EOSSH
   chmod +x "$MOCK_BIN/ssh"
@@ -204,8 +207,10 @@ echo "ssh $*" >> "${TEST_DIR}/ssh.log"
 CMD="$*"
 if echo "$CMD" | grep -q "echo ok"; then echo "ok"; exit 0; fi
 if echo "$CMD" | grep -q "python3 -c"; then echo "ok"; exit 0; fi
-if echo "$CMD" | grep -q "systemctl restart\|pkill"; then echo "ok"; exit 0; fi
-if echo "$CMD" | grep -q "systemctl is-active"; then echo "active"; exit 0; fi
+if echo "$CMD" | grep -q "systemctl restart"; then exit 1; fi
+if echo "$CMD" | grep -q "pkill"; then exit 0; fi
+if echo "$CMD" | grep -q "nohup.*openclaw"; then echo "started-999"; exit 0; fi
+if echo "$CMD" | grep -q "pgrep -c"; then echo "1"; exit 0; fi
 echo "ok"; exit 0
 EOSSH
   chmod +x "$MOCK_BIN/ssh"
@@ -221,9 +226,10 @@ echo "ssh $*" >> "${TEST_DIR}/ssh.log"
 CMD="$*"
 if echo "$CMD" | grep -q "echo ok"; then echo "ok"; exit 0; fi
 if echo "$CMD" | grep -q "python3 -c"; then echo "ok"; exit 0; fi
-if echo "$CMD" | grep -q "systemctl restart\|pkill"; then echo "ok"; exit 0; fi
-if echo "$CMD" | grep -q "systemctl is-active"; then echo "active"; exit 0; fi
-if echo "$CMD" | grep -q "journalctl"; then echo "gateway started"; exit 0; fi
+if echo "$CMD" | grep -q "systemctl restart"; then exit 1; fi
+if echo "$CMD" | grep -q "pkill"; then exit 0; fi
+if echo "$CMD" | grep -q "nohup.*openclaw"; then echo "started-999"; exit 0; fi
+if echo "$CMD" | grep -q "pgrep -c"; then echo "1"; exit 0; fi
 echo "ok"; exit 0
 EOSSH
   chmod +x "$MOCK_BIN/ssh"
@@ -231,7 +237,8 @@ EOSSH
   run "$SCRIPT" jack --mode apikey
   [ "$status" -eq 0 ]
 
-  grep -q "systemctl" "$TEST_DIR/ssh.log" || grep -q "pkill" "$TEST_DIR/ssh.log"
+  grep -q "pkill" "$TEST_DIR/ssh.log"
+  grep -q "nohup" "$TEST_DIR/ssh.log"
 }
 
 # ── SSH failure ─────────────────────────────────────────────────────────────

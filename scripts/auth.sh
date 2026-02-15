@@ -169,20 +169,28 @@ print(json.dumps(result))
 
 restart_gateway() {
   log_info "Restarting gateway..."
-  ssh_exec "$INSTANCE_NAME" "sudo systemctl restart openclaw-gateway 2>&1 || {
-    pkill -f 'openclaw.*gateway' 2>/dev/null || true
-    sleep 2
-    nohup openclaw gateway --port 18789 &>/dev/null &
-  }" 2>/dev/null || true
 
-  sleep 3
+  # Try systemd first
+  local restarted=false
+  if ssh_exec "$INSTANCE_NAME" "sudo systemctl restart openclaw-gateway 2>/dev/null" 2>/dev/null; then
+    restarted=true
+  fi
+
+  # Fallback: kill then start in separate SSH calls (nohup needs its own session)
+  if [[ "$restarted" != "true" ]]; then
+    ssh_exec "$INSTANCE_NAME" "pkill -f 'openclaw.*gateway' 2>/dev/null; sleep 1; pkill -9 -f 'openclaw.*gateway' 2>/dev/null || true" 2>/dev/null || true
+    sleep 2
+    ssh_exec "$INSTANCE_NAME" "nohup openclaw gateway --port 18789 >/tmp/openclaw/gateway.log 2>&1 & echo started-\$!" 2>/dev/null || true
+  fi
+
+  sleep 4
 
   local status
-  status=$(ssh_exec "$INSTANCE_NAME" "sudo systemctl is-active openclaw-gateway 2>&1 || pgrep -c 'openclaw-gateway' 2>/dev/null || echo inactive" 2>/dev/null)
-  if echo "$status" | grep -qiE "active|[0-9]"; then
+  status=$(ssh_exec "$INSTANCE_NAME" "pgrep -c 'openclaw-gateway' 2>/dev/null || echo 0" 2>/dev/null)
+  if [[ "$status" -gt 0 ]] 2>/dev/null; then
     log_success "Gateway restarted"
   else
-    log_warn "Gateway status: $status — check with: claw logs $INSTANCE_NAME"
+    log_warn "Gateway not detected — check with: claw logs $INSTANCE_NAME"
   fi
 }
 
@@ -222,8 +230,9 @@ auth['profiles']['anthropic:oauth'] = {
     'expiresAt': creds.get('expiresAt', creds.get('expires_at', ''))
 }
 auth.setdefault('order', {})['anthropic'] = ['anthropic:oauth', 'anthropic:token']
-# Clear lastGood so gateway doesn't auto-override back
+# Clear lastGood + usageStats so gateway doesn't auto-override back
 auth.pop('lastGood', None)
+auth.pop('usageStats', None)
 auth_file.write_text(json.dumps(auth, indent=2))
 
 # Patch every session's authProfileOverride
@@ -260,6 +269,7 @@ if auth_file.exists():
     auth = json.loads(auth_file.read_text())
     auth.setdefault('order', {})['anthropic'] = ['anthropic:token', 'anthropic:oauth']
     auth.pop('lastGood', None)
+    auth.pop('usageStats', None)
     auth_file.write_text(json.dumps(auth, indent=2))
 
 # Patch every session's authProfileOverride
