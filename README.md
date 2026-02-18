@@ -685,6 +685,49 @@ crontab -e
 # Add: */5 * * * * ~/openclaw-deploy/scripts/monitor-all.sh --quiet >> ~/fleet.log 2>&1
 ```
 
+### Solvr Integration (IPFS Pinning)
+
+Solvr provides decentralized IPFS pinning for AMCP checkpoints. Enable it with `--solvr-enabled` during deploy.
+
+**Setup:**
+
+1. Add `solvr_api_key` to `instances/credentials.json`:
+   ```json
+   {
+     "solvr_api_key": "solvr_..."
+   }
+   ```
+
+2. Deploy with Solvr enabled:
+   ```bash
+   ./deploy.sh --name child-03 --bot-token "7654321:AAF..." --solvr-enabled
+   ```
+
+**What happens:**
+- A child Solvr agent is registered (`{parent}_child_{instance}` naming)
+- Child AMCP storage provider is set to `solvr` with Pinata as fallback
+- Solvr API key is stored in `~/.amcp/config.json` under `apiKeys.solvr`
+- AMCP checkpoints are pinned to IPFS via Solvr, falling back to Pinata on failure
+
+**Manual Solvr setup (existing instances):**
+
+```bash
+# Push Solvr key to child via remote-config
+./scripts/remote-config.sh jack --set solvr_api_key=solvr_...
+
+# Or re-run AMCP setup (includes storage provider config)
+./scripts/setup-amcp.sh jack
+```
+
+**Verify:**
+```bash
+# Check child Solvr registration
+claw diagnose jack  # Shows Solvr status in output
+
+# Check storage config on child
+ssh root@<IP> "jq '.storage' ~/.amcp/config.json"
+```
+
 ---
 
 ## Development

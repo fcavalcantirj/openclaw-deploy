@@ -3,6 +3,9 @@
 # 02-bootstrap.sh — Runs ON the Hetzner VM via SSH
 # Installs: Node 22, Claude Code CLI, essential packages
 # Does NOT install OpenClaw — that's Claude Code's job.
+#
+# Optional env vars:
+#   SOLVR_API_KEY  — If set, stores in ~/.amcp/config.json under apiKeys.solvr
 # ============================================================================
 set -euo pipefail
 
@@ -94,6 +97,36 @@ LAUNCHER
 
 chmod +x /home/openclaw/run-claude-setup.sh
 chown openclaw:openclaw /home/openclaw/run-claude-setup.sh
+
+# ── Store SOLVR_API_KEY in AMCP config (if provided) ─────────────────────
+if [[ -n "${SOLVR_API_KEY:-}" ]]; then
+  echo "🔑 Storing SOLVR_API_KEY in AMCP config..."
+  AMCP_DIR="/home/openclaw/.amcp"
+  AMCP_CONFIG="$AMCP_DIR/config.json"
+  mkdir -p "$AMCP_DIR"
+
+  # Use agentmemory secret set if available, otherwise write directly
+  if command -v agentmemory &>/dev/null; then
+    agentmemory secret set solvr_api_key "$SOLVR_API_KEY" 2>/dev/null \
+      && echo "   Stored via AgentMemory secrets vault" \
+      || echo "   AgentMemory failed, falling back to config write"
+  fi
+
+  # Always write to config.json as primary storage (idempotent)
+  if [[ -f "$AMCP_CONFIG" ]]; then
+    # Merge into existing config
+    jq --arg key "$SOLVR_API_KEY" '.apiKeys.solvr = $key' "$AMCP_CONFIG" > "${AMCP_CONFIG}.tmp" \
+      && mv "${AMCP_CONFIG}.tmp" "$AMCP_CONFIG"
+  else
+    # Create new config with apiKeys.solvr
+    jq -n --arg key "$SOLVR_API_KEY" '{"apiKeys": {"solvr": $key}}' > "$AMCP_CONFIG"
+  fi
+  chown -R openclaw:openclaw "$AMCP_DIR"
+  chmod 600 "$AMCP_CONFIG"
+  echo "   SOLVR_API_KEY stored in $AMCP_CONFIG (apiKeys.solvr)"
+else
+  echo "ℹ️  No SOLVR_API_KEY set — skipping Solvr config"
+fi
 
 # ── Done ─────────────────────────────────────────────────────────────────
 echo ""

@@ -237,3 +237,28 @@
 - All 3 instances (dana, bruce-russo, jack) have ssh_user in metadata
 - bash -n passes on all scripts
 - clawd-bruv-ubuntu not imported (no SSH key available)
+
+## 2026-02-18: Pass SOLVR_API_KEY to child during provisioning (Phase 2)
+- Modified bootstrap.sh to accept SOLVR_API_KEY env var
+- Stores key in ~/.amcp/config.json under apiKeys.solvr (idempotent jq merge)
+- Uses agentmemory secret set if available, falls back to direct config write
+- Also updated master-setup.sh to write apiKeys.solvr alongside proactive-amcp config set
+- bootstrap.sh: 148 lines, bash -n passes
+
+## 2026-02-18: Configure child AMCP storage.provider = solvr with Pinata fallback (Phase 2)
+- Added storage provider config to master-setup.sh after Solvr credential storage
+- Default: provider=solvr when CHILD_SOLVR_API_KEY set, fallback=["pinata"] if PINATA_JWT provided
+- Sets storage.solvrEndpoint to https://api.solvr.dev
+- Falls back to provider=pinata if no Solvr key but PINATA_JWT present
+- Added Step 5b to setup-amcp.sh for standalone AMCP bootstrap path
+- Reads solvr_api_key and pinata_jwt from credentials.json, configures via SSH
+- master-setup.sh: 532 lines, setup-amcp.sh: 368 lines, bash -n passes on both
+
+## 2026-02-18: Add --solvr-enabled flag to deploy.sh (Phase 2)
+- Added --solvr-enabled CLI flag to deploy.sh (opt-in, default off)
+- When enabled: requires SOLVR_API_KEY in credentials.json, errors if missing
+- When disabled: skips Solvr registration entirely with info message
+- Passes SOLVR_ENABLED through to master-setup.sh via __SOLVR_ENABLED__ sed template
+- Added usage docs, examples for --solvr-enabled
+- Updated README.md with full Solvr Integration section (setup, behavior, manual config, verify)
+- deploy.sh: 456 lines, bash -n passes

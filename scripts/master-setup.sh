@@ -33,6 +33,7 @@ DEFAULT_MODEL="__DEFAULT_MODEL__"
 FALLBACK_MODELS="__FALLBACK_MODELS__"
 OPENAI_API_KEY="__OPENAI_API_KEY__"
 SKILLS_LIST="__SKILLS_LIST__"
+SOLVR_ENABLED="__SOLVR_ENABLED__"
 
 LOG_FILE="/var/log/openclaw-setup.log"
 CHILD_EMAIL="${INSTANCE_NAME}@agentmail.to"
@@ -219,7 +220,48 @@ main() {
   if [[ -n "$CHILD_SOLVR_API_KEY" ]]; then
     proactive-amcp config set solvr_api_key "$CHILD_SOLVR_API_KEY" --amcp-dir "$AMCP_DIR" || log "Warning: failed to set solvr_api_key"
     proactive-amcp config set parent_solvr_name "$PARENT_SOLVR_NAME" --amcp-dir "$AMCP_DIR" || log "Warning: failed to set parent_solvr_name"
+
+    # Also store under apiKeys.solvr for direct config access
+    AMCP_CONFIG="$AMCP_DIR/config.json"
+    if [[ -f "$AMCP_CONFIG" ]]; then
+      jq --arg key "$CHILD_SOLVR_API_KEY" '.apiKeys.solvr = $key' "$AMCP_CONFIG" > "${AMCP_CONFIG}.tmp" \
+        && mv "${AMCP_CONFIG}.tmp" "$AMCP_CONFIG" || log "Warning: failed to write apiKeys.solvr"
+    fi
     log "Solvr credentials stored in proactive-amcp config"
+  fi
+
+  # Configure AMCP storage provider (Solvr primary, Pinata fallback)
+  AMCP_CONFIG="$AMCP_DIR/config.json"
+  if [[ -n "$CHILD_SOLVR_API_KEY" ]]; then
+    # Solvr is primary storage, Pinata is fallback
+    local fallbacks='[]'
+    if [[ -n "$PINATA_JWT" ]]; then
+      fallbacks='["pinata"]'
+    fi
+    if [[ -f "$AMCP_CONFIG" ]]; then
+      jq --arg endpoint "https://api.solvr.dev" \
+         --argjson fallbacks "$fallbacks" \
+         '.storage.provider = "solvr" | .storage.solvrEndpoint = $endpoint | .storage.fallback = $fallbacks' \
+         "$AMCP_CONFIG" > "${AMCP_CONFIG}.tmp" \
+        && mv "${AMCP_CONFIG}.tmp" "$AMCP_CONFIG" \
+        || log "Warning: failed to set storage.provider"
+    else
+      jq -n --arg key "$CHILD_SOLVR_API_KEY" \
+            --arg endpoint "https://api.solvr.dev" \
+            --argjson fallbacks "$fallbacks" \
+            '{"storage": {"provider": "solvr", "solvrEndpoint": $endpoint, "fallback": $fallbacks}, "apiKeys": {"solvr": $key}}' \
+        > "$AMCP_CONFIG" || log "Warning: failed to create AMCP config"
+    fi
+    log "Storage provider: solvr (fallback: ${fallbacks})"
+  elif [[ -n "$PINATA_JWT" ]]; then
+    # Pinata only (no Solvr key)
+    if [[ -f "$AMCP_CONFIG" ]]; then
+      jq '.storage.provider = "pinata" | .storage.fallback = []' \
+         "$AMCP_CONFIG" > "${AMCP_CONFIG}.tmp" \
+        && mv "${AMCP_CONFIG}.tmp" "$AMCP_CONFIG" \
+        || log "Warning: failed to set storage.provider"
+    fi
+    log "Storage provider: pinata (no Solvr key)"
   fi
 
   chown -R openclaw:openclaw "$AMCP_DIR"

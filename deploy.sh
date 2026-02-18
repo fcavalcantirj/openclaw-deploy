@@ -59,6 +59,7 @@ ${BOLD}Optional:${NC}
   --model MODEL           Default model (default: anthropic/claude-sonnet-4-5-20250929)
   --fallback-models JSON  Fallback model chain as JSON array
   --skills LIST           Space-separated skill list to install
+  --solvr-enabled         Enable Solvr IPFS pinning (requires SOLVR_API_KEY in credentials)
   --parent-telegram-token TOKEN  Override parent Telegram bot token
   --parent-chat-id ID     Override parent Telegram chat ID
   --parent-email EMAIL    Override parent notification email
@@ -70,12 +71,15 @@ ${BOLD}Auto-created per child:${NC}
   - AgentMemory vault: <name>
   - AMCP identity with Pinata checkpoints
   - Self-healing watchdog
-  - Solvr child agent (if SOLVR_API_KEY set)
+  - Solvr child agent (if --solvr-enabled and SOLVR_API_KEY set)
 
 ${BOLD}Example:${NC}
   # 1. Create bot via @BotFather, get token
   # 2. Deploy:
   ./deploy.sh --name child-03 --bot-token "7654321:AAF..."
+
+  # With Solvr IPFS pinning:
+  ./deploy.sh --name child-03 --bot-token "7654321:AAF..." --solvr-enabled
 
 Credentials: $CREDENTIALS_FILE
 EOF
@@ -94,6 +98,7 @@ PARENT_SOLVR_NAME=""
 DEFAULT_MODEL="anthropic/claude-sonnet-4-5-20250929"
 FALLBACK_MODELS='["anthropic/claude-opus-4-6","anthropic/claude-haiku-4-5-20251001"]'
 SKILLS_LIST=""
+SOLVR_ENABLED=false
 FLAG_PARENT_TELEGRAM_TOKEN=""
 FLAG_PARENT_CHAT_ID=""
 FLAG_PARENT_EMAIL=""
@@ -108,6 +113,7 @@ while [[ $# -gt 0 ]]; do
     --model) DEFAULT_MODEL="$2"; shift 2 ;;
     --fallback-models) FALLBACK_MODELS="$2"; shift 2 ;;
     --skills) SKILLS_LIST="$2"; shift 2 ;;
+    --solvr-enabled) SOLVR_ENABLED=true; shift ;;
     --parent-solvr-name) PARENT_SOLVR_NAME="$2"; shift 2 ;;
     --parent-telegram-token) FLAG_PARENT_TELEGRAM_TOKEN="$2"; shift 2 ;;
     --parent-chat-id) FLAG_PARENT_CHAT_ID="$2"; shift 2 ;;
@@ -192,8 +198,13 @@ SOLVR_API_URL="${SOLVR_API_URL:-https://api.solvr.dev/v1}"
 CHILD_SOLVR_API_KEY=""
 CHILD_SOLVR_NAME=""
 
-if [[ -n "$SOLVR_API_KEY" ]]; then
-  log_info "Registering child Solvr account..."
+if [[ "$SOLVR_ENABLED" == true ]]; then
+  # --solvr-enabled requires SOLVR_API_KEY
+  if [[ -z "$SOLVR_API_KEY" ]]; then
+    log_error "--solvr-enabled requires solvr_api_key in credentials.json or SOLVR_API_KEY env var"
+    exit 1
+  fi
+  log_info "Registering child Solvr account (--solvr-enabled)..."
 
   # Step 1: Resolve parent name (auto-detect from /v1/me or use --parent-solvr-name flag)
   if [[ -z "$PARENT_SOLVR_NAME" ]]; then
@@ -267,7 +278,7 @@ if [[ -n "$SOLVR_API_KEY" ]]; then
     fi
   fi
 else
-  log_warn "No SOLVR_API_KEY in credentials — skipping Solvr registration"
+  log_info "Solvr disabled (use --solvr-enabled to opt in)"
 fi
 
 # =============================================================================
@@ -363,6 +374,7 @@ sed \
   -e "s|__FALLBACK_MODELS__|${FALLBACK_MODELS}|g" \
   -e "s|__OPENAI_API_KEY__|${OPENAI_API_KEY}|g" \
   -e "s|__SKILLS_LIST__|${SKILLS_LIST}|g" \
+  -e "s|__SOLVR_ENABLED__|${SOLVR_ENABLED}|g" \
   "$SCRIPTS_DIR/master-setup.sh" > "$TEMP_SCRIPT"
 
 scp -i "$SSH_KEY_PATH" $SSH_OPTS "$TEMP_SCRIPT" "root@${INSTANCE_IP}:/root/setup.sh"

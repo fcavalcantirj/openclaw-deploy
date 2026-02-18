@@ -275,6 +275,40 @@ echo -e "${BLUE}Step 5: Push config${NC}"
 "$SCRIPT_DIR/remote-config.sh" "$INSTANCE_NAME" --push
 echo
 
+# ── Step 5b: Configure storage provider ────────────────────────────────────
+
+echo -e "${BLUE}Step 5b: Storage provider${NC}"
+SOLVR_KEY=$(jq -r '.solvr_api_key // empty' "$CREDENTIALS_FILE" 2>/dev/null)
+PINATA_KEY=$(jq -r '.pinata_jwt // empty' "$CREDENTIALS_FILE" 2>/dev/null)
+
+if [[ -n "$SOLVR_KEY" ]]; then
+  FALLBACKS='[]'
+  [[ -n "$PINATA_KEY" ]] && FALLBACKS='["pinata"]'
+  RESULT=$(ssh_exec "$INSTANCE_NAME" "bash -c '
+    CFG=\$HOME/.amcp/config.json
+    if [ -f \"\$CFG\" ]; then
+      jq \".storage.provider = \\\"solvr\\\" | .storage.solvrEndpoint = \\\"https://api.solvr.dev\\\" | .storage.fallback = $FALLBACKS\" \
+         \"\$CFG\" > \"\${CFG}.tmp\" && mv \"\${CFG}.tmp\" \"\$CFG\" && echo ok || echo fail
+    else
+      echo no_config
+    fi
+  '" 2>/dev/null || echo "ssh_fail")
+  if [[ "$RESULT" == *"ok"* ]]; then
+    log_success "Storage: solvr (fallback: ${FALLBACKS})"
+  else
+    log_warn "Storage config may need manual setup: $RESULT"
+  fi
+elif [[ -n "$PINATA_KEY" ]]; then
+  ssh_exec "$INSTANCE_NAME" "bash -c '
+    CFG=\$HOME/.amcp/config.json
+    [ -f \"\$CFG\" ] && jq \".storage.provider = \\\"pinata\\\" | .storage.fallback = []\" \"\$CFG\" > \"\${CFG}.tmp\" && mv \"\${CFG}.tmp\" \"\$CFG\"
+  '" 2>/dev/null || true
+  log_success "Storage: pinata"
+else
+  log_warn "No Solvr or Pinata key — storage not configured"
+fi
+echo
+
 # ── Step 6: Install watchdog ───────────────────────────────────────────────
 
 echo -e "${BLUE}Step 6: Watchdog service${NC}"

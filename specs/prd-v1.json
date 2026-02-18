@@ -645,7 +645,7 @@
       "Use agentmemory secret set if AgentMemory configured, else direct config write",
       "Verify: deployed child can authenticate to api.solvr.dev/v1/me"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "solvr",
@@ -657,7 +657,7 @@
       "Set storage.solvrEndpoint to https://api.solvr.dev",
       "Verify: proactive-amcp checkpoint uses Solvr, falls back to Pinata on failure"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "category": "solvr",
@@ -670,6 +670,6 @@
       "Update README with Solvr integration documentation",
       "Verify: deploy.sh --solvr-enabled creates child with working Solvr pinning"
     ],
-    "passes": false
+    "passes": true
   }
 ]
