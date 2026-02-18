@@ -131,7 +131,7 @@
   },
   {
     "category": "bugfix",
-    "description": "Fix systemctl --user vs system-level inconsistency \u2014 all scripts use systemctl --user but master-setup.sh installs system-level unit at /etc/systemd/system/",
+    "description": "Fix systemctl --user vs system-level inconsistency — all scripts use systemctl --user but master-setup.sh installs system-level unit at /etc/systemd/system/",
     "steps": [
       "Audit all files using systemctl --user: monitor-all.sh, resuscitate.sh, restart.sh, update.sh, status.sh, verify.sh, setup-monitoring.sh, setup-telegram-bot.sh, setup-skills.sh, healthcheck.sh",
       "Replace systemctl --user with sudo systemctl in all operational scripts",
@@ -143,7 +143,7 @@
   },
   {
     "category": "architecture",
-    "description": "Document AMCP identity crisis \u2014 openclaw-deploy creates fake identity.json incompatible with amcp-protocol and proactive-amcp",
+    "description": "Document AMCP identity crisis — openclaw-deploy creates fake identity.json incompatible with amcp-protocol and proactive-amcp",
     "steps": [
       "Study amcp-protocol: real KERI identity with Ed25519 AID, signed checkpoints, BIP-39 recovery",
       "Study proactive-amcp: watchdog enforcement, tiered resurrection, secrets injection, session repair",
@@ -155,7 +155,7 @@
   },
   {
     "category": "testing",
-    "description": "Write TDD validation tests for systemctl fix \u2014 structural checks only, no gateway interaction",
+    "description": "Write TDD validation tests for systemctl fix — structural checks only, no gateway interaction",
     "steps": [
       "Grep all scripts/ for any remaining systemctl --user references for gateway",
       "Verify bash -n syntax on every modified script (28/28 pass)",
@@ -220,7 +220,7 @@
   },
   {
     "category": "integration",
-    "description": "Move secrets to proactive-amcp config \u2014 use 'proactive-amcp config set' instead of embedding in identity.json",
+    "description": "Move secrets to proactive-amcp config — use 'proactive-amcp config set' instead of embedding in identity.json",
     "steps": [
       "Remove all jq writes of secrets (pinata_jwt, parent_bot_token) to identity.json",
       "Replace with: proactive-amcp config set pinata_jwt \"$PINATA_JWT\"",
@@ -231,7 +231,7 @@
   },
   {
     "category": "integration",
-    "description": "Remove ALL direct identity.json mutations from scripts \u2014 zero jq writes to identity.json",
+    "description": "Remove ALL direct identity.json mutations from scripts — zero jq writes to identity.json",
     "steps": [
       "Audit all files in scripts/ for jq writes to identity.json",
       "Audit prompts/ and claw CLI for identity.json mutations",
@@ -255,9 +255,9 @@
     "category": "testing",
     "description": "Verify: grep confirms zero jq.*identity.json writes remaining in scripts/",
     "steps": [
-      "Run: grep -rn 'jq.*identity.json' scripts/ prompts/ \u2014 expect zero write matches",
-      "Run: grep -rn 'identity.json' scripts/ \u2014 verify remaining references are reads or documentation only",
-      "Run: grep -rn 'sha256' scripts/ \u2014 verify no sha256-based identity generation remains"
+      "Run: grep -rn 'jq.*identity.json' scripts/ prompts/ — expect zero write matches",
+      "Run: grep -rn 'identity.json' scripts/ — verify remaining references are reads or documentation only",
+      "Run: grep -rn 'sha256' scripts/ — verify no sha256-based identity generation remains"
     ],
     "passes": true
   },
@@ -274,7 +274,7 @@
   },
   {
     "category": "deploy",
-    "description": "Register child Solvr account during deployment \u2014 deterministic protocol-08 naming",
+    "description": "Register child Solvr account during deployment — deterministic protocol-08 naming",
     "steps": [
       "Resolve parent name: auto-detect from SOLVR_API_KEY via /v1/me, or require --parent-solvr-name flag",
       "Build child name: {PARENT_SOLVR_NAME}_child_{INSTANCE_NAME} (validate: lowercase, alphanum+underscore, max 32 chars)",
@@ -286,7 +286,7 @@
   },
   {
     "category": "cli",
-    "description": "Add 'claw diagnose' command \u2014 Claude Code runs health checks + searches Solvr",
+    "description": "Add 'claw diagnose' command — Claude Code runs health checks + searches Solvr",
     "steps": [
       "Add diagnose command to claw CLI, SSH to instance with -t for TTY",
       "Read SOLVR_API_KEY from child config, construct prompt from templates/diagnose-prompt.md",
@@ -299,7 +299,7 @@
   },
   {
     "category": "cli",
-    "description": "Add 'claw fix' command \u2014 Claude Code fixes issues via Solvr, escalates after 3 failures",
+    "description": "Add 'claw fix' command — Claude Code fixes issues via Solvr, escalates after 3 failures",
     "steps": [
       "Add fix command to claw CLI, runs diagnose first internally",
       "For each issue: search Solvr for solutions, apply fix, update approach status",
@@ -312,7 +312,7 @@
   },
   {
     "category": "cli",
-    "description": "Add 'claw shell' command \u2014 interactive Claude Code session on child instance",
+    "description": "Add 'claw shell' command — interactive Claude Code session on child instance",
     "steps": [
       "Add shell command to claw CLI",
       "SSH to instance with -t, detect workspace directory, exec claude --dangerously-skip-permissions",
@@ -336,7 +336,7 @@
     "description": "Create templates/fix-prompt.md for Claude Code fix sessions with Solvr workflow",
     "steps": [
       "Input: diagnose JSON output as {{DIAGNOSE_OUTPUT}}",
-      "Define Solvr workflow: search \u2192 apply \u2192 PATCH approach status, or POST problem \u2192 try fix \u2192 POST approach",
+      "Define Solvr workflow: search → apply → PATCH approach status, or POST problem → try fix → POST approach",
       "Define escalation: after 3 failed attempts, send Telegram + email to parent",
       "Placeholders: DIAGNOSE_OUTPUT, SOLVR_API_KEY, PARENT_TELEGRAM_TOKEN, PARENT_CHAT_ID, INSTANCE_NAME",
       "Verify: covers all Solvr API calls, escalation is loud and clear"
@@ -357,7 +357,7 @@
   },
   {
     "category": "lib",
-    "description": "Create scripts/lib/solvr.sh \u2014 Solvr API helper functions",
+    "description": "Create scripts/lib/solvr.sh — Solvr API helper functions",
     "steps": [
       "Require SOLVR_API_KEY env var",
       "Functions: solvr_search(query), solvr_post_problem(title, desc, tags), solvr_add_approach(problem_id, angle, method)",
@@ -420,16 +420,16 @@
   },
   {
     "category": "bugfix",
-    "description": "Fix SSH user: scripts hardcode 'openclaw@' but VMs use root \u2014 add ssh_user to metadata.json with root default, update all scripts",
+    "description": "Fix SSH user: scripts hardcode 'openclaw@' but VMs use root — add ssh_user to metadata.json with root default, update all scripts",
     "steps": [
       "Add ssh_user field support to load_instance() in lib/common.sh: INSTANCE_SSH_USER=$(jq -r '.ssh_user // \"root\"' \"$meta_file\")",
       "Update ssh_exec() in lib/common.sh to use $INSTANCE_SSH_USER instead of hardcoded 'root@'",
       "Update ssh_check() in lib/common.sh to use $INSTANCE_SSH_USER instead of hardcoded 'root@'",
       "Fix list.sh check_reachable(): replace hardcoded 'openclaw@$ip' with ssh_user from metadata (default root)",
-      "Fix status.sh: replace all 'openclaw@$SERVER_IP' references with ssh_user from metadata (default root) \u2014 lines 101, 122, 131, 142, 151, 162, 171, 180, 192, 202",
-      "Fix monitor-all.sh check_instance(): replace 'openclaw@$ip' with ssh_user from metadata (default root) \u2014 lines 139, 146, 155, 164, 173",
-      "Fix monitor-all.sh get_instance_details(): replace 'openclaw@$ip' with ssh_user from metadata (default root) \u2014 lines 198, 201, 204, 207",
-      "Fix restart.sh: replace all 'openclaw@$IP' references with ssh_user from metadata (default root) \u2014 lines 95, 103, 119, 135, 147, 154, 172",
+      "Fix status.sh: replace all 'openclaw@$SERVER_IP' references with ssh_user from metadata (default root) — lines 101, 122, 131, 142, 151, 162, 171, 180, 192, 202",
+      "Fix monitor-all.sh check_instance(): replace 'openclaw@$ip' with ssh_user from metadata (default root) — lines 139, 146, 155, 164, 173",
+      "Fix monitor-all.sh get_instance_details(): replace 'openclaw@$ip' with ssh_user from metadata (default root) — lines 198, 201, 204, 207",
+      "Fix restart.sh: replace all 'openclaw@$IP' references with ssh_user from metadata (default root) — lines 95, 103, 119, 135, 147, 154, 172",
       "Update dana's metadata.json: add '\"ssh_user\": \"root\"'",
       "Verify: list.sh shows dana as 'online' not 'offline'",
       "Verify: grep -rn 'openclaw@' scripts/ returns zero matches in operational scripts (only docs/comments)"
@@ -438,7 +438,7 @@
   },
   {
     "category": "bugfix",
-    "description": "Fix restart.sh JSON field name: reads '.ssh_key' but metadata uses 'ssh_key_path' \u2014 causes 'SSH key not found at null'",
+    "description": "Fix restart.sh JSON field name: reads '.ssh_key' but metadata uses 'ssh_key_path' — causes 'SSH key not found at null'",
     "steps": [
       "Fix restart.sh line 78: change jq -r '.ssh_key' to jq -r '.ssh_key_path // .ssh_key // empty' (matches list.sh and status.sh pattern)",
       "Add null/empty validation after SSH_KEY extraction: if [[ -z \"$SSH_KEY\" || \"$SSH_KEY\" == \"null\" || ! -f \"$SSH_KEY\" ]]; then error; fi",
@@ -450,7 +450,7 @@
   },
   {
     "category": "management",
-    "description": "Create import.sh \u2014 import existing Hetzner servers not tracked by CLI into instances/ directory",
+    "description": "Create import.sh — import existing Hetzner servers not tracked by CLI into instances/ directory",
     "steps": [
       "Create scripts/import.sh accepting: instance-name, IP, SSH key path as required arguments",
       "Validate arguments: name must be alphanumeric+hyphen, IP must be valid format, SSH key file must exist",
@@ -467,13 +467,13 @@
   },
   {
     "category": "bugfix",
-    "description": "Migrate scripts not using lib/common.sh \u2014 list.sh, status.sh, monitor-all.sh, restart.sh should source common.sh for SSH helpers",
+    "description": "Migrate scripts not using lib/common.sh — list.sh, status.sh, monitor-all.sh, restart.sh should source common.sh for SSH helpers",
     "steps": [
       "Refactor list.sh to source lib/common.sh: use load_instance() for metadata, ssh_check() for reachability, remove duplicate color/function definitions",
       "Refactor status.sh to source lib/common.sh: use load_instance() + ssh_exec() for all SSH calls, remove duplicate color/function definitions",
       "Refactor monitor-all.sh check_instance() to source lib/common.sh: use load_instance() + ssh_exec(), remove inline SSH calls",
       "Refactor restart.sh to source lib/common.sh: use load_instance() + ssh_exec(), remove duplicate error/info/success functions",
-      "Verify: all four scripts use INSTANCE_SSH_USER from load_instance() \u2014 single source of truth for SSH user",
+      "Verify: all four scripts use INSTANCE_SSH_USER from load_instance() — single source of truth for SSH user",
       "Verify: grep -c 'source.*common.sh' scripts/{list,status,monitor-all,restart}.sh returns 4 (all source it)",
       "Verify: bash -n passes on all four modified scripts"
     ],
@@ -481,7 +481,7 @@
   },
   {
     "category": "cli",
-    "description": "Add 'claw auth' command \u2014 show/switch auth mode (API key vs OAuth) on child instances",
+    "description": "Add 'claw auth' command — show/switch auth mode (API key vs OAuth) on child instances",
     "steps": [
       "Create scripts/auth.sh: show current auth profile, switch to OAuth or API key",
       "Show mode: SSH to child, read auth-profiles.json + sessions.json + ~/.claude/.credentials.json, display active profile, fallback order, OAuth expiry",
@@ -497,7 +497,7 @@
   },
   {
     "category": "deploy",
-    "description": "Configure Anthropic models + fallbacks during deploy \u2014 default Sonnet, fallback Opus then Haiku",
+    "description": "Configure Anthropic models + fallbacks during deploy — default Sonnet, fallback Opus then Haiku",
     "steps": [
       "Add model configuration step to master-setup.sh after gateway first starts",
       "Set default: openclaw models set anthropic/claude-sonnet-4-5-20250929",
@@ -512,7 +512,7 @@
   },
   {
     "category": "deploy",
-    "description": "Install OpenClaw provider auth plugins during deploy \u2014 Google Gemini OAuth, Copilot proxy",
+    "description": "Install OpenClaw provider auth plugins during deploy — Google Gemini OAuth, Copilot proxy",
     "steps": [
       "Enable google-gemini-cli-auth plugin: openclaw config set plugins.entries.google-gemini-cli-auth.enabled true",
       "Enable google-antigravity-auth plugin: openclaw config set plugins.entries.google-antigravity-auth.enabled true",
@@ -525,7 +525,7 @@
   },
   {
     "category": "deploy",
-    "description": "Install skills via ClawdHub during deploy \u2014 gog, openai-whisper, github, session-logs, proactive-amcp",
+    "description": "Install skills via ClawdHub during deploy — gog, openai-whisper, github, session-logs, proactive-amcp",
     "steps": [
       "Install gog (Google Workspace): clawhub install gog (already bundled, verify ready)",
       "Install openai-whisper: clawhub install openai-whisper (local Whisper CLI, no API key)",
@@ -556,7 +556,7 @@
   },
   {
     "category": "cli",
-    "description": "Add 'claw models' command \u2014 show/set models and fallbacks on child instances",
+    "description": "Add 'claw models' command — show/set models and fallbacks on child instances",
     "steps": [
       "Create scripts/models.sh following auth.sh pattern: SSH to child, run openclaw models",
       "Show mode (claw models <name>): display default model, fallbacks, auth overview, configured models",
@@ -570,7 +570,7 @@
   },
   {
     "category": "cli",
-    "description": "Add 'claw plugins' command \u2014 show/enable/disable OpenClaw plugins on child instances",
+    "description": "Add 'claw plugins' command — show/enable/disable OpenClaw plugins on child instances",
     "steps": [
       "Create scripts/plugins.sh: SSH to child, run openclaw plugins list/enable/disable",
       "Show mode (claw plugins <name>): display loaded vs disabled plugins",
@@ -583,7 +583,7 @@
   },
   {
     "category": "cli",
-    "description": "Add 'claw skills' command \u2014 list/install/update skills on child instances via ClawdHub",
+    "description": "Add 'claw skills' command — list/install/update skills on child instances via ClawdHub",
     "steps": [
       "Create scripts/skills.sh: SSH to child, run openclaw skills list / clawhub install",
       "Show mode (claw skills <name>): display ready vs missing skills",
@@ -634,5 +634,42 @@
       "Verify: grep confirms zero hardcoded 'openclaw@' in operational scripts"
     ],
     "passes": true
+  },
+  {
+    "category": "solvr",
+    "phase": 2,
+    "description": "Pass SOLVR_API_KEY to child during provisioning via proactive-amcp secrets vault",
+    "steps": [
+      "Modify scripts/bootstrap.sh to accept SOLVR_API_KEY parameter",
+      "Store key in child ~/.amcp/config.json under apiKeys.solvr",
+      "Use agentmemory secret set if AgentMemory configured, else direct config write",
+      "Verify: deployed child can authenticate to api.solvr.dev/v1/me"
+    ],
+    "passes": false
+  },
+  {
+    "category": "solvr",
+    "phase": 2,
+    "description": "Configure child AMCP storage.provider = solvr with Pinata fallback",
+    "steps": [
+      "Update scripts/setup-amcp.sh to set storage.provider in ~/.amcp/config.json",
+      "Default: provider=solvr, fallback=[pinata] (if PINATA_JWT provided)",
+      "Set storage.solvrEndpoint to https://api.solvr.dev",
+      "Verify: proactive-amcp checkpoint uses Solvr, falls back to Pinata on failure"
+    ],
+    "passes": false
+  },
+  {
+    "category": "solvr",
+    "phase": 2,
+    "description": "Add --solvr-enabled flag to deploy.sh for opt-in Solvr IPFS pinning",
+    "steps": [
+      "Add --solvr-enabled CLI flag to scripts/deploy.sh",
+      "When enabled: require SOLVR_API_KEY env var or prompt",
+      "Pass flag through to bootstrap.sh and setup-amcp.sh",
+      "Update README with Solvr integration documentation",
+      "Verify: deploy.sh --solvr-enabled creates child with working Solvr pinning"
+    ],
+    "passes": false
   }
 ]

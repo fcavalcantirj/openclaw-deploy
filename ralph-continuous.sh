@@ -159,7 +159,7 @@ while true; do
 
   # Check if PRD is complete before cleaning up
   prd_complete=false
-  if grep -q "PRD COMPLETE" "$tmplog" 2>/dev/null; then
+  if grep -q "PHASE_2_COMPLETE\|PRD COMPLETE" "$tmplog" 2>/dev/null; then
     prd_complete=true
   fi
 
@@ -275,7 +275,7 @@ while true; do
     echo ""
     echo -e "${GREEN}${BOLD}╔═══════════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${GREEN}${BOLD}║                                                                   ║${NC}"
-    echo -e "${GREEN}${BOLD}║   🎉🎉🎉  PRD IS COMPLETE!  🎉🎉🎉                                ║${NC}"
+    echo -e "${GREEN}${BOLD}║   🎉🎉🎉  PHASE 2 COMPLETE!  🎉🎉🎉                                ║${NC}"
     echo -e "${GREEN}${BOLD}║                                                                   ║${NC}"
     echo -e "${GREEN}${BOLD}║   📦 Total batches:     ${batch_count}                                          ║${NC}"
     echo -e "${GREEN}${BOLD}║   🔄 Total iterations:  ${total_iterations}                                         ║${NC}"
@@ -286,7 +286,7 @@ while true; do
     echo ""
 
     # Notify via Telegram about completion!
-    send_telegram "🎉 *openclaw-deploy PRD COMPLETE!* 🎉
+    send_telegram "🎉 *openclaw-deploy PHASE 2 COMPLETE!* 🎉
 
 📦 Total batches: ${batch_count}
 🔄 Total iterations: ${total_iterations}

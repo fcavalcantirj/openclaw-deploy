@@ -74,13 +74,7 @@ for ((i=1; i<=$1; i++)); do
 === WORKFLOW ===
 1. Read CLAUDE.md for project guidelines.
 2. Read SPEC.md for full specification details.
-🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
-⛔ PHASE RESTRICTION: ONLY WORK ON TASKS WHERE \"phase\": 2 ⛔
-⛔ DO NOT TOUCH phase 1 or phase 3 tasks - they are BLOCKED ⛔
-⛔ If all phase 2 tasks pass, STOP and report PHASE_2_COMPLETE ⛔
-🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
-
-3. Find next requirement in specs/prd-v1.json where passes=false AND phase=2 and work ONLY on that.
+3. Find next requirement in specs/prd-v1.json where passes=false and work ONLY on that.
 4. Implement the requirement (write scripts, configs, prompts).
 5. TEST IT - bash -n syntax check, grep structural checks.
 6. Update specs/progress.txt with what you did.
