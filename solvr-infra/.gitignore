@@ -1,0 +1,4 @@
+# Instance data (contains IPs, keys, etc.)
+instances/
+.venv/
+__pycache__/
